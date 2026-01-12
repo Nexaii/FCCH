@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/14.0.1">
+  <PropertyGroup>
+    <Authors>Nexai</Authors>
+    <Version>1.1.0.0</Version>
+    <Description>Free Company Chest Helper. Automates moving existing items to and from the Free Company Chest.&#x0a;Easily withdraw custom item lists or sets of materials for workshop projects.</Description>
+    <Copyright></Copyright>
+    <PackageProjectUrl>https://github.com/Nexaii/FCCH</PackageProjectUrl>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Completion.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="PackageRelease" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <MakeDir Directories="$(ProjectDir)releases" />
+    <ZipDirectory SourceDirectory="$(OutputPath)" DestinationFile="$(ProjectDir)releases\$(AssemblyName).zip" Overwrite="true" />
+    <Message Importance="High" Text="Release ZIP created: releases\$(AssemblyName).zip" />
+  </Target>
+
+</Project>
