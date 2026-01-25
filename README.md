@@ -18,7 +18,7 @@
 ---
 
 ## 📖 About
-**FCCH** — Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.
+**FCCH** – Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.
 
 ## ✨ Features
 
