@@ -7,7 +7,6 @@
     <a href="#-features">Features</a> · <a href="#-installation">Installation</a> · <a href="#-usage">Usage</a>
   </p>
 <p align="center">
-    <a href="https://github.com/Nexaii/FCCH/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Nexaii/FCCH?style=for-the-badge&label=License&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
     <a href="https://ko-fi.com/nexai">
     <img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Ko-fi" />
 </a>
