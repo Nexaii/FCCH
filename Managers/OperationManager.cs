@@ -201,7 +201,6 @@ namespace FCCH.Managers
         {
             var moves = new List<MoveOperation>();
             var virtualFC = chestManager.CachedItems.ToList();
-            var availableTabs = chestManager.GetDepositableTabs();
 
             var stacksByItemId = new Dictionary<uint, List<ChestManager.ScannedSlot>>();
             var occupiedSlots = new HashSet<(InventoryType, uint)>();
@@ -249,7 +248,7 @@ namespace FCCH.Managers
                     uint srcSlot = (uint)i;
 
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
-                        ? stacks.Where(x => x.Quantity < x.MaxStack && availableTabs.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
 
                     foreach (var stack in partialStacks)
@@ -280,7 +279,7 @@ namespace FCCH.Managers
                     if (remainingToDeposit > 0)
                     {
                         var presentPages = pagesByItemId.TryGetValue(item->ItemId, out var pages)
-                            ? pages.Where(p => availableTabs.Contains(p)).OrderBy(x => x).ToList()
+                            ? pages.OrderBy(x => x).ToList()
                             : new List<InventoryType>();
 
                         if (presentPages.Count > 0)
