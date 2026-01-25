@@ -55,10 +55,10 @@ namespace FCCH
             GilManager = new GilManager(Configuration, ChestHelper.MoveManager);
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
-            
-            OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem);
 
             OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
+            
+            OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
 
             SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService);
             

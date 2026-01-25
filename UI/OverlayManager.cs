@@ -11,6 +11,7 @@ using Dalamud.Interface.Colors;
 using FCCH.Common;
 using FCCH.Models;
 using FCCH.Managers;
+using FCCH.Managers.Organizer;
 
 namespace FCCH.UI
 {
@@ -20,18 +21,20 @@ namespace FCCH.UI
         private readonly ChestHelper _helper;
         private readonly IGameGui _gameGui;
         private readonly Configuration _configuration;
+        private readonly OrgService _orgService;
         
         private readonly ToolbarWindow _toolbarWindow;
         private readonly StopWindow _stopWindow;
 
-        public OverlayManager(ChestHelper helper, IGameGui gameGui, Configuration configuration, WindowSystem windowSystem)
+        public OverlayManager(ChestHelper helper, IGameGui gameGui, Configuration configuration, WindowSystem windowSystem, OrgService orgService)
         {
             _helper = helper;
             _gameGui = gameGui;
             _configuration = configuration;
+            _orgService = orgService;
 
             _toolbarWindow = new ToolbarWindow(helper, configuration);
-            _stopWindow = new StopWindow(helper);
+            _stopWindow = new StopWindow(helper, orgService);
 
             windowSystem.AddWindow(_toolbarWindow);
             windowSystem.AddWindow(_stopWindow);
@@ -53,7 +56,9 @@ namespace FCCH.UI
 
             _toolbarWindow.CurrentScale = scale;
 
-            if (_helper.IsUserOperationActive)
+            bool isOperationActive = _helper.IsUserOperationActive || _orgService.JobStatus == OrgJobStatus.Running;
+
+            if (isOperationActive)
             {
                 _toolbarWindow.IsOpen = false;
                 
@@ -303,17 +308,28 @@ namespace FCCH.UI
     public class StopWindow : Window, IDisposable
     {
         private readonly ChestHelper _helper;
+        private readonly OrgService _orgService;
 
-        public StopWindow(ChestHelper helper) : base("StopWindow", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
+        public StopWindow(ChestHelper helper, OrgService orgService) : base("StopWindow", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
         {
             _helper = helper;
+            _orgService = orgService;
             RespectCloseHotkey = false;
         }
 
         public override void Draw()
         {
-            int total = _helper.MoveManager.TotalQueued;
-            int completed = _helper.MoveManager.CompletedCount;
+            int total, completed;
+            if (_orgService.JobStatus == OrgJobStatus.Running)
+            {
+                total = _orgService.TotalMoves;
+                completed = _orgService.CompletedMoves;
+            }
+            else
+            {
+                total = _helper.MoveManager.TotalQueued;
+                completed = _helper.MoveManager.CompletedCount;
+            }
             float progress = total > 0 ? (float)completed / total : 0f;
             int percent = (int)(progress * 100);
 

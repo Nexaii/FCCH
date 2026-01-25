@@ -312,6 +312,7 @@ namespace FCCH.Managers.Organizer
         {
             if ((DateTime.Now - _scanWaitStart).TotalMilliseconds >= SCAN_WAIT_MS)
             {
+                _chestManager.ScanFCChest();
                 _state = ExecutorState.Verifying;
                 StatusMessage = "Verifying...";
                 DebugLog("Scan wait complete. Transitioning to Verifying.");
