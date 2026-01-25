@@ -28,6 +28,7 @@ namespace FCCH.Managers
 
         public Configuration Configuration => _configuration;
         public bool IsProcessing => MoveManager.IsProcessing || !_indexer.IsIdle;
+        public bool IsUserOperationActive => MoveManager.IsProcessing;
         public List<Models.ShoppingItem> ShoppingList => _configuration.ShoppingItems;
         public bool IsSettingsVisible { get; set; } = false;
         public ItemFilter ItemFilter { get; private set; }

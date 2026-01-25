@@ -53,7 +53,7 @@ namespace FCCH.UI
 
             _toolbarWindow.CurrentScale = scale;
 
-            if (_helper.IsProcessing)
+            if (_helper.IsUserOperationActive)
             {
                 _toolbarWindow.IsOpen = false;
                 
