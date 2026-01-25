@@ -4,11 +4,15 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using FC_Chest_Helper.Common;
-using FC_Chest_Helper.UI;
+using FCCH.Common;
+using FCCH.Managers;
+using FCCH.UI;
+using FCCH.GameData;
+using FCCH.Managers.Gil;
+using FCCH.Managers.Organizer;
 using System.Linq;
 
-namespace FC_Chest_Helper
+namespace FCCH
 {
     public sealed class Plugin : IDalamudPlugin
     {
@@ -28,12 +32,14 @@ namespace FC_Chest_Helper
         [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
         [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
 
-        private FCChestHelper ChestHelper { get; init; }
+        private ChestHelper ChestHelper { get; init; }
         private OverlayManager OverlayManager { get; init; }
         private SettingsWindow SettingsWindow { get; init; }
-        private FC_Chest_Helper.GameData.WorkshopCache WorkshopCache { get; init; }
+        private WorkshopCache WorkshopCache { get; init; }
         private Dalamud.Interface.Windowing.WindowSystem WindowSystem { get; init; }
-        private FC_Chest_Helper.Managers.OpLockManager OpLockManager { get; init; }
+        private OpLockManager OpLockManager { get; init; }
+        private GilManager GilManager { get; init; }
+        private OrgService OrgService { get; init; }
 
         public Configuration Configuration { get; init; }
 
@@ -42,22 +48,25 @@ namespace FC_Chest_Helper
             Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
             Configuration.Initialize(PluginInterface);
 
-            WorkshopCache = new FC_Chest_Helper.GameData.WorkshopCache(Data, PluginLog);
-            ChestHelper = new FCChestHelper(Configuration);
+            WorkshopCache = new WorkshopCache(Data, PluginLog);
+            ChestHelper = new ChestHelper(Configuration);
             
-            OpLockManager = new FC_Chest_Helper.Managers.OpLockManager();
+            OpLockManager = new OpLockManager();
+            GilManager = new GilManager(Configuration, ChestHelper.MoveManager);
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem);
-            
-            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration);
+
+            OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
+
+            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService);
             
             WindowSystem.AddWindow(SettingsWindow);
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
-                HelpMessage = "Opens settings.\n/fcch da - Deposits All\n/fcch dd - Deposit Duplicates\n/fcch wa - Withdraw All\n/fcch ws - Withdraw Singles\n/fcch wp - Withdraw Workshop\n/fcch info - FC Permissions"
+                HelpMessage = "Opens settings.\n[Deposit] da=All | dd=Duplicates | dc=Crystals\n[Withdraw] wa=All | ws=Custom | wp=Workshop | wc=Crystals\n[Gil] gd/gw <amt> (k/m/all)\n[Info] info"
             });
 
             PluginInterface.UiBuilder.Draw += DrawUI;
@@ -111,82 +120,108 @@ namespace FC_Chest_Helper
             switch (subCommand)
             {
                 case "da":
-                    ChestHelper.DepositAll();
+                    ChestHelper.ProcessCommand(() => ChestHelper.DepositAll());
                     break;
                 case "dd":
-                    ChestHelper.DepositDuplicates();
+                    ChestHelper.ProcessCommand(() => ChestHelper.DepositDuplicates());
                     break;
                 case "wa":
-                    ChestHelper.WithdrawAll();
+                    ChestHelper.ProcessCommand(() => ChestHelper.WithdrawAll());
                     break;
                 case "ws":
-                    if (Configuration.WithdrawItems.Count > 0)
+                    ChestHelper.ProcessCommand(() =>
                     {
-                        var dict = new System.Collections.Generic.Dictionary<uint, int>();
-                        foreach(var item in Configuration.WithdrawItems) dict[item.ItemId] = item.Quantity;
-                        ChestHelper.WithdrawMaterials(dict);
-                    }
-                    else ChatHelper.Info("Singles list is empty.");
+                        if (Configuration.WithdrawItems.Count > 0)
+                        {
+                            var dict = new System.Collections.Generic.Dictionary<uint, int>();
+                            foreach(var item in Configuration.WithdrawItems) dict[item.ItemId] = item.Quantity;
+                            ChestHelper.WithdrawMaterials(dict);
+                        }
+                        else ChatHelper.Info("Custom list is empty.");
+                    });
+                    break;
+                case "dc":
+                    ChestHelper.ProcessCommand(() => ChestHelper.CrystalMgr.Deposit(true));
+                    break;
+                case "wc":
+                    ChestHelper.ProcessCommand(() => ChestHelper.CrystalMgr.Withdraw(true));
                     break;
                 case "wp":
-                    if (ChestHelper.ShoppingList.Count > 0)
+                    ChestHelper.ProcessCommand(() =>
                     {
-                        var list = new System.Collections.Generic.Dictionary<uint, int>();
-                        foreach (var shopItem in ChestHelper.ShoppingList)
+                        if (ChestHelper.ShoppingList.Count > 0)
                         {
-                            var mats = shopItem.Craft.Phases
-                                .SelectMany(p => p.Items)
-                                .Select(x => new { Item = x, Required = x.TotalQuantity * shopItem.Quantity });
-                            foreach (var mat in mats)
+                            var list = new System.Collections.Generic.Dictionary<uint, int>();
+                            foreach (var shopItem in ChestHelper.ShoppingList)
                             {
-                                if (!list.ContainsKey(mat.Item.ItemId)) list[mat.Item.ItemId] = 0;
-                                list[mat.Item.ItemId] += mat.Required;
+                                var mats = shopItem.Craft.Phases
+                                    .SelectMany(p => p.Items)
+                                    .Select(x => new { Item = x, Required = x.TotalQuantity * shopItem.Quantity });
+                                foreach (var mat in mats)
+                                {
+                                    if (!list.ContainsKey(mat.Item.ItemId)) list[mat.Item.ItemId] = 0;
+                                    list[mat.Item.ItemId] += mat.Required;
+                                }
                             }
+                            ChestHelper.WithdrawMaterials(list);
                         }
-                        ChestHelper.WithdrawMaterials(list);
-                    }
-                    else ChatHelper.Info("Workshop list is empty.");
+                        else ChatHelper.Info("Workshop list is empty.");
+                    });
                     break;
 
                 case "info":
-                    var rank = ChestHelper.GetFCRank();
-                    var tabs = ChestHelper.GetAvailableTabs();
-                    
-                    var tabString = string.Join(", ", System.Linq.Enumerable.Select(tabs, t => t.ToString().Replace("FreeCompanyPage", "")));
-                    ChatHelper.Info($"FC Rank: {rank}. Available Tabs: {tabString}");
-
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append($"Permissions: ");
-                    
-                    foreach (var tab in tabs)
+                    ChestHelper.ProcessCommand(() =>
                     {
-                        var access = ChestHelper.GetChestAccess(tab);
-                        string tabName = tab.ToString().Replace("FreeCompanyPage", "");
-
+                        var rank = ChestHelper.GetFCRank();
+                        var tabs = ChestHelper.GetAvailableTabs();
                         
-                        string accessStr = ((byte)access) switch
-                        {
-                            0 => "Full Access",
-                            1 => "Deposit/View",
-                            2 => "Deposit Only",
-                            3 => "View Only",
-                            4 => "No Access",
-                            _ => $"Unknown ({access})"
-                        };
+                        var tabString = string.Join(", ", System.Linq.Enumerable.Select(tabs, 
+                            t => t.ToString().Replace("FreeCompanyPage", "")));
+                        ChatHelper.Info($"FC Rank: {rank}. Available Tabs: {tabString}");
 
-                        sb.Append($"{tabName}: {accessStr} | ");
-                    }
-                    
-                    // Remove trailing separator
-                    if (sb.Length > 3) sb.Length -= 3;
-                    
-                    ChatHelper.Info(sb.ToString());
+                        var sb = new System.Text.StringBuilder();
+                        sb.Append($"Permissions: ");
+                        
+                        foreach (var tab in tabs)
+                        {
+                            var access = ChestHelper.GetChestAccess(tab);
+                            string tabName = tab.ToString().Replace("FreeCompanyPage", "");
+                            
+                            string accessStr = ((byte)access) switch
+                            {
+                                0 => "Full Access",
+                                1 => "Deposit/View",
+                                2 => "Deposit Only",
+                                3 => "View Only",
+                                4 => "No Access",
+                                _ => $"Unknown ({access})"
+                            };
+
+                            sb.Append($"{tabName}: {accessStr} | ");
+                        }
+                        
+                        if (sb.Length > 3) sb.Length -= 3;
+                        
+                        ChatHelper.Info(sb.ToString());
+                        ChatHelper.Info($"Gil: {GilManager.GetPermissionString()}");
+                    });
+                    break;
+                case "gd":
+                    ChestHelper.ProcessCommand(() => GilManager.HandleDepositCommand(parts.Length > 1 ? parts[1] : ""));
+                    break;
+                case "gw":
+                    ChestHelper.ProcessCommand(() => GilManager.HandleWithdrawCommand(parts.Length > 1 ? parts[1] : ""));
+                    break;
+                case "gildebug":
+                    GilManager.EnableDebugMode();
                     break;
                 case "debug":
-                    DebugEnums.PrintValues();
+                    Configuration.DebugMode = !Configuration.DebugMode;
+                    Configuration.Save();
+                    ChatHelper.Info($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
                 default:
-                    ChatHelper.Info("Unknown command. Available: da, dd, wa, ws, wp, info, debug");
+                    ChatHelper.Info("Unknown command. Available: da, dd, wa, ws, wp, gd, gw, gildebug, info, debug");
                     break;
             }
         }
@@ -208,18 +243,20 @@ namespace FC_Chest_Helper
 
         public void Dispose()
         {
+            GilManager?.Dispose();
             OpLockManager?.Dispose();
-            
+            OrgService?.Dispose();
+
             CommandManager.RemoveHandler("/fcch");
             PluginInterface.UiBuilder.Draw -= DrawUI;
             PluginInterface.UiBuilder.OpenConfigUi -= DrawConfig;
             PluginInterface.UiBuilder.OpenMainUi -= DrawMain;
             Framework.Update -= OnUpdate;
-            
-            WindowSystem.RemoveAllWindows();
-            OverlayManager.Dispose();
-            SettingsWindow.Dispose();
-            ChestHelper.Dispose();
+
+            WindowSystem?.RemoveAllWindows();
+            OverlayManager?.Dispose();
+            SettingsWindow?.Dispose();
+            ChestHelper?.Dispose();
         }
     }
 }

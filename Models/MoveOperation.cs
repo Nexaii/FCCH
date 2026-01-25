@@ -1,6 +1,6 @@
 using FFXIVClientStructs.FFXIV.Client.Game;
 
-namespace FC_Chest_Helper.Models
+namespace FCCH.Models
 {
     public struct MoveOperation
     {

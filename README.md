@@ -19,48 +19,52 @@
 ---
 
 ## 📖 About
-**FCCH** Free Company Chest Helper is a plugin designed to streamline inventory management for Free Companies.
+**FCCH** — Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.
 
 ## ✨ Features
-### Deposit Tools
-*   **Deposit All**: Rapidly deposits all eligible items from your inventory to the chest.
-*   **Deposit Duplicates**: "Smart Deposit" mode that scans the chest and only deposits items that already have a stack present, ensuring you never clutter tabs with new item types.
 
-### Retrieval Tools
-*   **Withdraw Project**: Add and withdraw specific Company Workshop projects, for the exact amount of materials required to complete the current phase or the entire project.
-*   **Withdraw Singles**: Create custom "Singles" lists for frequent tasks (e.g. withdrawing ceruleum tanks, magitek repair kits, submarine components).
-*   **Withdraw All**: A powerful tool to rapidly empty the current chest tab.
+### Deposit Tools
+- **Deposit All** – Deposits all eligible items from your inventory.
+- **Deposit Duplicates** – Only deposits items matching existing stacks in the chest.
+- **Deposit Crystals** – Deposits shards/crystals/clusters with configurable keep amounts.
+
+### Withdraw Tools
+- **Withdraw All** – Empties the current chest tab.
+- **Withdraw Custom List** – Create item lists for frequent tasks (ceruleum, repair kits, etc.).
+- **Withdraw Workshop** – Pull exact materials for Company Workshop projects.
+- **Withdraw Crystals** – Withdraws crystals to hit your configured threshold.
+
+### Organizer
+- **Move** – Transfer items between FC chest tabs with filters.
+- **Sort** – Reorder items within a tab by category, ID, name, or quantity.
 
 ### Utilities
-*   **Stack Logic**: Optional configuration to always leave 1 item per stack in the chest, preserving slot reservations for specific items.
-*   **Clipboard Sharing**: Export and import your lists to easily share setups with others.
+- **Ignore List** – Exclude items from Deposit/Withdraw operations. Supports presets.
+- **Crystal Config** – Set global or per crystal keep amounts for automated crystal management.
+- **Leave One per Stack** – Preserve slot reservations by keeping 1 item per stack.
+- **Export/Import** – Share lists via clipboard.
 
 ## 🚀 Installation
-1.  **Prerequisites**: Ensure you have [FFXIVQuickLauncher](https://github.com/goatcorp/FFXIVQuickLauncher) installed with Dalamud enabled.
-2.  **Add Repository**:
-    *   Open Dalamud Settings: type `/xlsettings` in chat.
-    *   Navigate to **Experimental** > **Custom Plugin Repositories**.
-    *   Add the following URL:
-        ```
-        https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
-        ```
-    *   Click **Save**.
-3.  **Install**:
-    *   Open the Plugin Installer: type `/xlplugins`.
-    *   Search for **FCCH**.
-    *   Click **Install**.
+1. **Prerequisites**: [FFXIVQuickLauncher](https://github.com/goatcorp/FFXIVQuickLauncher) with Dalamud enabled.
+2. **Add Repository**: `/xlsettings` → Experimental → Custom Plugin Repositories:
+   ```
+   https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
+   ```
+3. **Install**: `/xlplugins` → Search **FCCH** → Install.
 
-## � Usage
-The primary interface is accessed via the `/fcch` command. You can also use chat commands for quick actions.
+## 📋 Commands
 
 | Command | Description |
 | :--- | :--- |
-| `/fcch` | Open the configuration window. |
-| `/fcch da` | **Deposit All**: Deposits all eligible items from your inventory. |
-| `/fcch dd` | **Deposit Duplicates**: Deposits only items that match existing stacks in the chest. |
-| `/fcch wa` | **Withdraw All**: Withdraws all items from the current chest tab (Use with caution). |
-| `/fcch ws` | **Withdraw Singles**: Withdraws items defined in your "Singles" list. |
-| `/fcch wp` | **Withdraw Project**: Withdraws materials required for the current Workshop Project. |
-| `/fcch info` | Displays current rank permissions and available tabs. |
-
+| `/fcch` | Open settings window |
+| `/fcch da` | Deposit All |
+| `/fcch dd` | Deposit Duplicates |
+| `/fcch dc` | Deposit Crystals |
+| `/fcch wa` | Withdraw All |
+| `/fcch ws` | Withdraw Custom List |
+| `/fcch wc` | Withdraw Crystals |
+| `/fcch wp` | Withdraw Workshop |
+| `/fcch gd <amount>` | Deposit Gil (supports `15k`, `5m`, `all`) |
+| `/fcch gw <amount>` | Withdraw Gil |
+| `/fcch info` | Show FC rank, permissions, and tab access |
 

@@ -5,9 +5,9 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
-using FC_Chest_Helper.Common;
+using FCCH.Common;
 
-namespace FC_Chest_Helper.Managers
+namespace FCCH.Managers
 {
     public unsafe class ChestManager : IDisposable
     {
@@ -18,11 +18,19 @@ namespace FC_Chest_Helper.Managers
         {
             if (addon == null) return;
             
-            // Standard InventoryType enumeration usually starts FC Page 1 at 20001
-            // Target Index should be 0-based
-            int targetIndex = (int)targetPage - 20000;
+            int targetIndex = targetPage switch
+            {
+                InventoryType.FreeCompanyPage1 => 0,
+                InventoryType.FreeCompanyPage2 => 1,
+                InventoryType.FreeCompanyPage3 => 2,
+                InventoryType.FreeCompanyPage4 => 3,
+                InventoryType.FreeCompanyPage5 => 4,
+                InventoryType.FreeCompanyCrystals => 5,
+                InventoryType.FreeCompanyGil => 6,
+                _ => -1
+            };
             
-            if (targetIndex < 0 || targetIndex > 4) 
+            if (targetIndex == -1) 
             {
                 Plugin.PluginLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
                 return;
@@ -30,7 +38,7 @@ namespace FC_Chest_Helper.Managers
 
             var values = stackalloc AtkValue[2];
             values[0].Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int;
-            values[0].Int = 0; // Action: Change Tab?
+            values[0].Int = 0;
             values[1].Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int;
             values[1].Int = targetIndex;
             
@@ -73,10 +81,19 @@ namespace FC_Chest_Helper.Managers
                 CachedItems.AddRange(kvp.Value);
             }
 
-            var availableTabs = GetAvailableTabs();
+            var permissions = new List<InventoryType> 
+            { 
+                InventoryType.FreeCompanyPage1, 
+                InventoryType.FreeCompanyPage2, 
+                InventoryType.FreeCompanyPage3, 
+                InventoryType.FreeCompanyPage4, 
+                InventoryType.FreeCompanyPage5,
+                InventoryType.FreeCompanyCrystals,
+                InventoryType.FreeCompanyGil 
+            };
             int totalFound = 0;
 
-            foreach (var type in availableTabs)
+            foreach (var type in permissions)
             {
                 if (!_inventoryScanner.IsInventoryLoaded(type)) continue;
 
@@ -89,7 +106,7 @@ namespace FC_Chest_Helper.Managers
                 for (int i = 0; i < container->Size; i++)
                 {
                     var item = container->GetInventorySlot(i);
-                    if (item == null || item->ItemId == 0) continue;
+                    if (item == null || (item->ItemId == 0 && item->Quantity == 0)) continue;
 
                     uint maxStack = 999;
                     try
@@ -98,7 +115,10 @@ namespace FC_Chest_Helper.Managers
                         var row = sheet?.GetRowOrDefault(item->ItemId);
                         if (row != null) maxStack = row.Value.StackSize;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Plugin.PluginLog.Warning($"Failed to get stack size for Item#{item->ItemId}: {ex.Message}");
+                    }
 
                     pageItems.Add(new ScannedSlot
                     {
@@ -115,7 +135,19 @@ namespace FC_Chest_Helper.Managers
                 var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
                 bool isActivePage = (addon != null && addon->IsVisible && GetCurrentFCPage(addon) == type);
 
-                if (pageCount > 0 || isActivePage)
+                if (type == InventoryType.FreeCompanyGil && pageItems.Count == 0)
+                {
+                     pageItems.Add(new ScannedSlot
+                     {
+                         Page = type,
+                         ItemId = 1, 
+                         Quantity = 0,
+                         Slot = 0,
+                         IsHq = false
+                     });
+                }
+
+                if (pageCount > 0 || isActivePage || type == InventoryType.FreeCompanyGil || type == InventoryType.FreeCompanyCrystals)
                 {
                     ChestState[type] = pageItems;
                     CachedItems.RemoveAll(x => x.Page == type);
@@ -136,7 +168,7 @@ namespace FC_Chest_Helper.Managers
             for (int i = 0; i < container->Size; i++)
             {
                 var item = container->GetInventorySlot(i);
-                if (item == null || item->ItemId == 0) continue;
+                if (item == null || (item->ItemId == 0 && item->Quantity == 0)) continue;
 
                 uint maxStack = 999;
                 try
@@ -145,7 +177,10 @@ namespace FC_Chest_Helper.Managers
                     var row = sheet?.GetRowOrDefault(item->ItemId);
                     if (row != null) maxStack = row.Value.StackSize;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Plugin.PluginLog.Warning($"Failed to get stack size for Item#{item->ItemId}: {ex.Message}");
+                }
 
                 items.Add(new ScannedSlot
                 {
@@ -157,7 +192,22 @@ namespace FC_Chest_Helper.Managers
                     MaxStack = maxStack
                 });
             }
+
+            if (page == InventoryType.FreeCompanyGil && items.Count == 0)
+            {
+                items.Add(new ScannedSlot
+                {
+                    Page = page,
+                    ItemId = 1,
+                    Quantity = 0,
+                    Slot = 0,
+                    IsHq = false
+                });
+            }
+
             ChestState[page] = items;
+            CachedItems.RemoveAll(x => x.Page == page);
+            CachedItems.AddRange(items);
         }
 
         public InventoryType GetCurrentFCPage(AtkUnitBase* addon)
@@ -169,6 +219,8 @@ namespace FC_Chest_Helper.Managers
             if (IsRadioButtonChecked(addon, 99)) return InventoryType.FreeCompanyPage3;
             if (IsRadioButtonChecked(addon, 98)) return InventoryType.FreeCompanyPage4;
             if (IsRadioButtonChecked(addon, 97)) return InventoryType.FreeCompanyPage5;
+            if (IsRadioButtonChecked(addon, 15)) return InventoryType.FreeCompanyCrystals;
+            if (IsRadioButtonChecked(addon, 16)) return InventoryType.FreeCompanyGil;
             
             return InventoryType.Invalid;
         }
@@ -185,7 +237,6 @@ namespace FC_Chest_Helper.Managers
              var component = compNode->Component;
              if (component == null) return false;
              
-             // Check if "checked" image (usually node 2 or 3 in the component) is visible
              if (component->UldManager.NodeListCount > 2)
              {
                  var checkMark = component->UldManager.NodeList[2];
@@ -255,6 +306,8 @@ namespace FC_Chest_Helper.Managers
                 if (IsNodeVisible(addon, 99)) tabs.Add(InventoryType.FreeCompanyPage3);
                 if (IsNodeVisible(addon, 98)) tabs.Add(InventoryType.FreeCompanyPage4);
                 if (IsNodeVisible(addon, 97)) tabs.Add(InventoryType.FreeCompanyPage5);
+                if (IsNodeVisible(addon, 15)) tabs.Add(InventoryType.FreeCompanyCrystals);
+                if (IsNodeVisible(addon, 16)) tabs.Add(InventoryType.FreeCompanyGil);
                 
                 if (tabs.Count > 0) return tabs;
             }
@@ -265,8 +318,33 @@ namespace FC_Chest_Helper.Managers
                 InventoryType.FreeCompanyPage2, 
                 InventoryType.FreeCompanyPage3, 
                 InventoryType.FreeCompanyPage4, 
-                InventoryType.FreeCompanyPage5 
+                InventoryType.FreeCompanyPage5,
+                InventoryType.FreeCompanyCrystals,
+                InventoryType.FreeCompanyGil 
             };
+        }
+
+        public List<InventoryType> GetDepositableTabs()
+        {
+            var allTabs = GetAvailableTabs();
+            var result = new List<InventoryType>();
+            
+            foreach (var tab in allTabs)
+            {
+                if (tab == InventoryType.FreeCompanyCrystals || tab == InventoryType.FreeCompanyGil)
+                {
+                    result.Add(tab);
+                    continue;
+                }
+                
+                var access = GetChestAccess(tab);
+                if (access == 0 || access == 2)
+                {
+                    result.Add(tab);
+                }
+            }
+            
+            return result;
         }
 
         private bool IsNodeVisible(AtkUnitBase* addon, uint nodeId)
@@ -276,14 +354,11 @@ namespace FC_Chest_Helper.Managers
              return node != null && node->IsVisible();
         }
 
-        public void Dispose()
-        {
-            _inventoryScanner.Dispose();
-        }
+
         
         public void UpdateCacheAfterMove(InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot, uint itemId, uint amount, bool isHq)
         {
-            if (srcInv >= InventoryType.FreeCompanyPage1 && srcInv <= InventoryType.FreeCompanyPage5)
+            if ((srcInv >= InventoryType.FreeCompanyPage1 && srcInv <= InventoryType.FreeCompanyPage5) || srcInv == InventoryType.FreeCompanyGil || srcInv == InventoryType.FreeCompanyCrystals)
             {
                 var srcEntry = CachedItems.Find(x => x.Page == srcInv && x.Slot == srcSlot && x.ItemId == itemId);
                 if (srcEntry != null)
@@ -295,7 +370,7 @@ namespace FC_Chest_Helper.Managers
                 }
             }
             
-            if (dstInv >= InventoryType.FreeCompanyPage1 && dstInv <= InventoryType.FreeCompanyPage5)
+            if ((dstInv >= InventoryType.FreeCompanyPage1 && dstInv <= InventoryType.FreeCompanyPage5) || dstInv == InventoryType.FreeCompanyGil || dstInv == InventoryType.FreeCompanyCrystals)
             {
                 var dstEntry = CachedItems.Find(x => x.Page == dstInv && x.Slot == dstSlot);
                 if (dstEntry != null)
@@ -319,5 +394,54 @@ namespace FC_Chest_Helper.Managers
         
         public InventoryContainer* GetContainer(InventoryType type) => _inventoryScanner.GetContainer(type);
         public bool IsInventoryLoaded(InventoryType type) => _inventoryScanner.IsInventoryLoaded(type);
+
+        public string GetDebugContent()
+        {
+            var sb = new System.Text.StringBuilder();
+            
+            var gil = CachedItems.FirstOrDefault(x => x.Page == InventoryType.FreeCompanyGil);
+            if (gil != null)
+            {
+                sb.AppendLine($"Gil: {gil.Quantity:N0}");
+            }
+            else
+            {
+                 sb.AppendLine("Gil: Not Scanned / 0");
+            }
+            
+            var crystals = CachedItems.Where(x => x.Page == InventoryType.FreeCompanyCrystals).ToList();
+            if (crystals.Count > 0)
+            {
+                sb.AppendLine("Crystals:");
+                foreach (var c in crystals)
+                {
+                    try
+                    {
+                        var sheet = Plugin.Data.GetExcelSheet<Item>();
+                        var name = sheet?.GetRowOrDefault(c.ItemId)?.Name.ToString() ?? $"Item#{c.ItemId}";
+                        sb.AppendLine($"  - {name}: {c.Quantity:N0}");
+                    }
+                    catch
+                    {
+                        sb.AppendLine($"  - Item#{c.ItemId}: {c.Quantity:N0}");
+                    }
+                }
+            }
+            else if (IsInventoryLoaded(InventoryType.FreeCompanyCrystals))
+            {
+                sb.AppendLine("Crystals: None");
+            }
+            else
+            {
+                sb.AppendLine("Crystals: None / Not Scanned");
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        public void Dispose()
+        {
+            _inventoryScanner?.Dispose();
+        }
     }
 }

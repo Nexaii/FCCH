@@ -8,22 +8,23 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
-using FC_Chest_Helper.Common;
-using FC_Chest_Helper.Models;
+using FCCH.Common;
+using FCCH.Models;
+using FCCH.Managers;
 
-namespace FC_Chest_Helper.UI
+namespace FCCH.UI
 {
 
     public class OverlayManager : IDisposable
     {
-        private readonly FCChestHelper _helper;
+        private readonly ChestHelper _helper;
         private readonly IGameGui _gameGui;
         private readonly Configuration _configuration;
         
         private readonly ToolbarWindow _toolbarWindow;
         private readonly StopWindow _stopWindow;
 
-        public OverlayManager(FCChestHelper helper, IGameGui gameGui, Configuration configuration, WindowSystem windowSystem)
+        public OverlayManager(ChestHelper helper, IGameGui gameGui, Configuration configuration, WindowSystem windowSystem)
         {
             _helper = helper;
             _gameGui = gameGui;
@@ -46,17 +47,14 @@ namespace FC_Chest_Helper.UI
                 return;
             }
 
-            // Base Position
             float scale = addon->Scale;
-            var baseX = addon->X + (5 * scale); // Moved 5px more left (was +10, now +5), scaled
-            var baseY = addon->Y - (40 * scale); // Above chest, scaled
+            var baseX = addon->X + (5 * scale);
+            var baseY = addon->Y - (40 * scale);
 
-            // Pass scale to window for spacer sizing
             _toolbarWindow.CurrentScale = scale;
 
             if (_helper.IsProcessing)
             {
-                // Show ONLY Stop Window
                 _toolbarWindow.IsOpen = false;
                 
                 _stopWindow.IsOpen = true;
@@ -64,7 +62,6 @@ namespace FC_Chest_Helper.UI
             }
             else
             {
-                // Show Operations (Toolbar)
                 _stopWindow.IsOpen = false;
 
                 _toolbarWindow.IsOpen = true;
@@ -75,24 +72,22 @@ namespace FC_Chest_Helper.UI
         public void Dispose() { }
     }
 
-    // Unified Toolbar Window
     public class ToolbarWindow : Window, IDisposable
     {
-        private readonly FCChestHelper _helper;
+        private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
         
-        // State for Confirmations
         private bool _showDepositConfirm = false;
         private bool _showWithdrawConfirm = false;
         private bool _dontShowAgain = false;
         
-        // Dynamic Confirmation State
         private Action? _pendingConfirmAction;
         private string _confirmMessage = "";
+        private int _lastCrystalAction = 0;
 
         public float CurrentScale { get; set; } = 1.0f;
 
-        public ToolbarWindow(FCChestHelper helper, Configuration configuration) : base("FCCH Toolbar", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
+        public ToolbarWindow(ChestHelper helper, Configuration configuration) : base("FCCH Toolbar", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
         {
             _helper = helper;
             _configuration = configuration;
@@ -101,27 +96,22 @@ namespace FC_Chest_Helper.UI
 
         public override void Draw()
         {
-            // Set Spacing: 5px between items (buttons)
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(5 * CurrentScale, 5 * CurrentScale));
 
-            // SETTINGS SECTION
-            ImGui.AlignTextToFramePadding(); // Align icon
+            ImGui.AlignTextToFramePadding();
             ImGui.PushFont(UiBuilder.IconFont);
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button(FontAwesomeIcon.Cog.ToIconString()))
             {
-                // Toggle via Helper property, triggering toggle in System loop
                 _helper.IsSettingsVisible = !_helper.IsSettingsVisible;
             }
             ImGui.PopStyleColor();
             ImGui.PopFont();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Settings");
 
-            // SECTION SPACER (12px total: 4px ItemSpacing + Dummy(4px) + 4px ItemSpacing)
             ImGui.SameLine();
             ImGui.Dummy(new Vector2(7 * CurrentScale, 0));
 
-            // DEPOSIT SECTION
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
             ImGui.PushFont(UiBuilder.IconFont);
@@ -151,11 +141,37 @@ namespace FC_Chest_Helper.UI
             ImGui.PopFont();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Deposit Duplicates");
 
-            // SECTION SPACER (12px total)
             ImGui.SameLine();
             ImGui.Dummy(new Vector2(7 * CurrentScale, 0));
 
-            // WITHDRAW SECTION
+            ImGui.SameLine();
+            ImGui.PushFont(UiBuilder.IconFont);
+            var crystalColor = _lastCrystalAction switch
+            {
+                1 => new Vector4(0f, 1f, 1f, 1f),
+                2 => new Vector4(1f, 0.64f, 0f, 1f),
+                _ => new Vector4(0.8f, 0.8f, 0.8f, 1f)
+            };
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+            ImGui.PushStyleColor(ImGuiCol.Text, crystalColor);
+            if (ImGui.Button(FontAwesomeIcon.Gem.ToIconString() + "##Crystal"))
+            {
+                _lastCrystalAction = 1;
+                _helper.CrystalMgr.Deposit(true);
+            }
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+            {
+                _lastCrystalAction = 2;
+                _helper.CrystalMgr.Withdraw(true);
+            }
+            ImGui.PopStyleColor(3);
+            ImGui.PopFont();
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Crystals\nLeft Click: Deposit\nRight Click: Withdraw");
+
+            ImGui.SameLine();
+            ImGui.Dummy(new Vector2(7 * CurrentScale, 0));
+
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
             ImGui.PushFont(UiBuilder.IconFont);
@@ -178,9 +194,9 @@ namespace FC_Chest_Helper.UI
             ImGui.SameLine();
             ImGui.PushFont(UiBuilder.IconFont);
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-            if (ImGui.Button(FontAwesomeIcon.FileAlt.ToIconString() + "##Singles"))
+            if (ImGui.Button(FontAwesomeIcon.FileAlt.ToIconString() + "##Custom"))
             {
-                RequestWithdraw("Withdraw Single Items list?", () => 
+                RequestWithdraw("Withdraw Custom list?", () => 
                 {
                     var list = new Dictionary<uint, int>();
                     foreach(var item in _configuration.WithdrawItems) 
@@ -193,7 +209,7 @@ namespace FC_Chest_Helper.UI
             }
             ImGui.PopStyleColor();
             ImGui.PopFont();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Withdraw Singles List");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Withdraw Custom List");
 
             ImGui.SameLine();
             ImGui.PushFont(UiBuilder.IconFont);
@@ -222,11 +238,10 @@ namespace FC_Chest_Helper.UI
             ImGui.PopFont();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Withdraw Workshop Projects");
 
-            // CONFIRMATION MODALS
             DrawConfirmationModal("Confirm Deposit", _confirmMessage, ref _showDepositConfirm, true);
             DrawConfirmationModal("Confirm Withdraw", _confirmMessage, ref _showWithdrawConfirm, false);
             
-            ImGui.PopStyleVar(); // Pop ItemSpacing
+            ImGui.PopStyleVar();
         }
 
         private void RequestDeposit(string message, Action action)
@@ -285,12 +300,11 @@ namespace FC_Chest_Helper.UI
         public void Dispose() { }
     }
 
-    // Stop Window (Kept separate as it acts as a modal overlay/status indicator)
     public class StopWindow : Window, IDisposable
     {
-        private readonly FCChestHelper _helper;
+        private readonly ChestHelper _helper;
 
-        public StopWindow(FCChestHelper helper) : base("StopWindow", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
+        public StopWindow(ChestHelper helper) : base("StopWindow", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoMove)
         {
             _helper = helper;
             RespectCloseHotkey = false;
@@ -298,17 +312,26 @@ namespace FC_Chest_Helper.UI
 
         public override void Draw()
         {
+            int total = _helper.MoveManager.TotalQueued;
+            int completed = _helper.MoveManager.CompletedCount;
+            float progress = total > 0 ? (float)completed / total : 0f;
+            int percent = (int)(progress * 100);
+
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiColors.HealerGreen, "Processing...");
+            ImGui.TextColored(ImGuiColors.HealerGreen, $"Processing: {percent}%");
             ImGui.SameLine();
             
-            // "X" button style (Transparent normal, Red Hover)
-            ImGui.PushFont(UiBuilder.IconFont);
-            if (ImGui.Button(FontAwesomeIcon.Times.ToIconString()))
+            ImGui.SetNextItemWidth(120);
+            ImGui.ProgressBar(progress, new Vector2(120, 0), "");
+            ImGui.SameLine();
+            
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGuiColors.DalamudRed);
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGuiColors.DalamudRed);
+            if (ImGui.Button("Stop"))
             {
                 _helper.Stop();
             }
-            ImGui.PopFont();
+            ImGui.PopStyleColor(2);
         }
         public void Dispose() { }
     }

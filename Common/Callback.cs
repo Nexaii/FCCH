@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
-namespace FC_Chest_Helper
+namespace FCCH.Common
 {
     public static unsafe class Callback
     {
@@ -42,7 +42,6 @@ namespace FC_Chest_Helper
         {
             if (Base == null) return;
             var atkValues = (AtkValue*)Marshal.AllocHGlobal(values.Length * sizeof(AtkValue));
-            if (atkValues == null) return;
             try
             {
                 for (var i = 0; i < values.Length; i++)

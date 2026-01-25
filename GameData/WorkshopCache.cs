@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
-using Lumina.Excel.Sheets; // Add this
+using Lumina.Excel.Sheets;
 
-namespace FC_Chest_Helper.GameData;
+namespace FCCH.GameData;
 
 public sealed class WorkshopCache
 {
@@ -27,7 +26,6 @@ public sealed class WorkshopCache
 
             foreach (var seq in sheetSequence)
             {
-                // Filter by CompanyCraftDraftCategory
                 if (seq.CompanyCraftDraftCategory == 0) continue;
 
                 var resultItem = sheetItem.GetRow(seq.ResultItem);
@@ -45,8 +43,9 @@ public sealed class WorkshopCache
                     {
                         part = sheetPart.GetRow(partId);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        pluginLog.Warning($"Failed to get CompanyCraftPart row {partId}: {ex.Message}");
                         continue;
                     }
                     if (part.RowId == 0) continue;
@@ -63,8 +62,9 @@ public sealed class WorkshopCache
                         {
                             process = sheetProcess.GetRow(processId);
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            pluginLog.Warning($"Failed to get CompanyCraftProcess row {processId}: {ex.Message}");
                             continue;
                         }
                         if (process.RowId == 0) continue;
@@ -79,8 +79,9 @@ public sealed class WorkshopCache
                             {
                                 supply = sheetSupply.GetRow(supplyId);
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                pluginLog.Warning($"Failed to get CompanyCraftSupplyItem row {supplyId}: {ex.Message}");
                                 continue;
                             }
                             if (supply.RowId == 0) continue;
@@ -90,8 +91,9 @@ public sealed class WorkshopCache
                             {
                                 item = sheetItem.GetRow(supply.Item);
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                pluginLog.Warning($"Failed to get Item row {supply.Item}: {ex.Message}");
                                 continue;
                             }
                             if (item.RowId == 0) continue;

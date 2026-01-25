@@ -5,7 +5,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Dalamud.Bindings.ImGui;
 
-namespace FC_Chest_Helper.Common
+namespace FCCH.Common
 {
     /// <summary>
     /// Helper for exporting/importing tab data via clipboard

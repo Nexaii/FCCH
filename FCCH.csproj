@@ -2,8 +2,8 @@
 <Project Sdk="Dalamud.NET.Sdk/14.0.1">
   <PropertyGroup>
     <Authors>Nexai</Authors>
-    <Version>1.1.0.0</Version>
-    <Description>Free Company Chest Helper. Automates moving existing items to and from the Free Company Chest.&#x0a;Easily withdraw custom item lists or sets of materials for workshop projects.</Description>
+    <Version>2.0.0.0</Version>
+    <Description>Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.</Description>
     <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/Nexaii/FCCH</PackageProjectUrl>
     <OutputType>Library</OutputType>
@@ -15,7 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <Content Include="FCCH.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

@@ -4,27 +4,29 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FC_Chest_Helper.Models;
-using FC_Chest_Helper.Common;
+using FCCH.Models;
+using FCCH.Common;
 using System.Runtime.InteropServices;
 
-namespace FC_Chest_Helper.Managers
+namespace FCCH.Managers
 {
     public unsafe class MoveManager : IDisposable
     {
         private readonly Configuration _configuration;
         private readonly ChestManager _chestManager;
         public Queue<MoveOperation> MoveQueue { get; private set; } = new();
+        private readonly HashSet<(InventoryType, uint, InventoryType, uint, uint)> _queuedOps = new();
         
         public DateTime LastActionTime { get; private set; } = DateTime.MinValue;
         public bool IsProcessing => MoveQueue.Count > 0;
         public bool ProcessedThisFrame { get; private set; } = false;
+        public bool SuppressCompletionSound { get; set; } = false;
+        public int TotalQueued { get; private set; } = 0;
+        public int CompletedCount { get; private set; } = 0;
         
-        // Agent MoveItem delegate - for full stack FC chest moves (handles Busy states better)
         private delegate nint MoveItemDelegate(void* agent, InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot);
         private MoveItemDelegate? _moveItem;
         
-        // Native MoveItemWithQuantity - for partial/split moves
         private delegate nint MoveItemWithQuantityDelegate(IntPtr manager, InventoryType srcType, ushort srcSlot, InventoryType dstType, ushort dstSlot, uint quantity);
         private MoveItemWithQuantityDelegate? _moveItemWithQuantity;
 
@@ -53,7 +55,6 @@ namespace FC_Chest_Helper.Managers
                     Plugin.PluginLog.Warning("[MoveManager] Agent MoveItem signature mismatch.");
                 }
                 
-                // Native MoveItemWithQuantity - for partial moves
                 var nativeSig = "48 89 5C 24 10 48 89 6C 24 18 56 57 41 55 41 56 41 57 48 83 EC 30";
                 if (Plugin.SigScanner.TryScanText(nativeSig, out var nativePtr))
                 {
@@ -73,7 +74,11 @@ namespace FC_Chest_Helper.Managers
 
         public void Enqueue(MoveOperation op)
         {
+            var key = (op.SrcInv, op.SrcSlot, op.DstInv, op.DstSlot, op.ItemId);
+            if (_queuedOps.Contains(key)) return;
+            _queuedOps.Add(key);
             MoveQueue.Enqueue(op);
+            TotalQueued++;
         }
 
         public void Update()
@@ -91,22 +96,27 @@ namespace FC_Chest_Helper.Managers
             if (MoveQueue.Count == 0) return;
 
             var op = MoveQueue.Dequeue();
+            _queuedOps.Remove((op.SrcInv, op.SrcSlot, op.DstInv, op.DstSlot, op.ItemId));
+            CompletedCount++;
             var invManager = InventoryManager.Instance();
             if (invManager == null) return;
 
-                if (!_chestManager.IsInventoryLoaded(op.SrcInv))
-                {
-                    DebugLog($"[ExecuteMove] Source inventory {op.SrcInv} not loaded. Skipping.");
-                    return;
-                }
-            if (!_chestManager.IsInventoryLoaded(op.DstInv))
+            var srcContainer = invManager->GetInventoryContainer(op.SrcInv);
+            var dstContainer = invManager->GetInventoryContainer(op.DstInv);
+
+            if (srcContainer == null)
             {
-                DebugLog($"[ExecuteMove] Destination inventory {op.DstInv} not loaded. Skipping.");
+                DebugLog($"[ExecuteMove] Source container {op.SrcInv} is null. Skipping.");
+                return;
+            }
+            if (dstContainer == null)
+            {
+                DebugLog($"[ExecuteMove] Destination container {op.DstInv} is null. Skipping.");
                 return;
             }
 
             if (_configuration.VerboseMode)
-                FC_Chest_Helper.Common.ChatHelper.Info($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
+                ChatHelper.Info($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
             
             if (_configuration.DebugMode)
                 DebugLog($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) Native={op.IsNativeMove}");
@@ -136,7 +146,20 @@ namespace FC_Chest_Helper.Managers
 
             try
             {
-                if (op.IsNativeMove && _moveItemWithQuantity != null)
+                if (op.ItemId == 1)
+                {
+                    ChatHelper.Info($"[MoveManager] Processing Gil Transaction: {op.Amount:N0}");
+                    if (op.IsNativeMove && _moveItemWithQuantity != null)
+                    {
+                        _moveItemWithQuantity((IntPtr)invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, op.Amount);
+                        DebugLog($"[Success] Native moved {op.Amount} Gil");
+                    }
+                    else
+                    {
+                         DebugLog($"[Warning] Non-native Gil move requested. Gil operations handled by GilManager.");
+                    }
+                }
+                else if (op.IsNativeMove && _moveItemWithQuantity != null)
                 {
                     _moveItemWithQuantity((IntPtr)invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, op.Amount);
                     DebugLog($"[Success] Native moved {op.Amount}x Item#{op.ItemId}");
@@ -178,7 +201,9 @@ namespace FC_Chest_Helper.Managers
                    type == InventoryType.FreeCompanyPage2 ||
                    type == InventoryType.FreeCompanyPage3 ||
                    type == InventoryType.FreeCompanyPage4 ||
-                   type == InventoryType.FreeCompanyPage5;
+                   type == InventoryType.FreeCompanyPage5 ||
+                   type == InventoryType.FreeCompanyGil ||
+                   type == InventoryType.FreeCompanyCrystals;
         }
         
         private void DebugLog(string msg)
@@ -197,7 +222,13 @@ namespace FC_Chest_Helper.Managers
             catch { }
         }
         
-        public void Clear() => MoveQueue.Clear();
+        public void Clear()
+        {
+            MoveQueue.Clear();
+            _queuedOps.Clear();
+            TotalQueued = 0;
+            CompletedCount = 0;
+        }
 
         public void Dispose()
         {

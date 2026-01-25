@@ -1,4 +1,4 @@
-namespace FC_Chest_Helper.GameData;
+namespace FCCH.GameData;
 
 public enum WorkshopCraftCategory
 {

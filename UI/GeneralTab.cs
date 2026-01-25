@@ -2,10 +2,11 @@ using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
-using FC_Chest_Helper;
+using FCCH;
 using Dalamud.Interface.ImGuiFileDialog;
+using Dalamud.Interface.Colors;
 
-namespace FC_Chest_Helper.UI
+namespace FCCH.UI
 {
     public class GeneralTab
     {
@@ -20,180 +21,222 @@ namespace FC_Chest_Helper.UI
 
         public void Draw()
         {
-            if (ImGui.BeginChild("GeneralTabScroll", new Vector2(0, 0), false))
+            if (ImGui.BeginChild("GeneralTabScroll", new Vector2(0, 0), true))
             {
-            if (ImGui.CollapsingHeader("Audio", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-                bool playSound = _configuration.PlayCompletionSound;
-                if (ImGui.Checkbox("Completion Sound", ref playSound))
-                {
-                    _configuration.PlayCompletionSound = playSound;
-                    _configuration.Save();
-                }
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Audio", ImGuiTreeNodeFlags.Leaf);
                 
-                string path = _configuration.CustomSoundPath;
-                ImGui.SetNextItemWidth(200);
-                if (ImGui.InputTextWithHint("##soundPath", "Sound path...", ref path, 1000))
+                DrawSettingRow("Completion Sound", () =>
                 {
-                    _configuration.CustomSoundPath = path;
-                    _configuration.Save();
-                }
-                
-                ImGui.SameLine();
-                ImGui.PushFont(UiBuilder.IconFont);
-                if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##soundBrowse"))
-                {
-                     _fileDialogManager.OpenFileDialog("Select Sound File", "Audio Files{.mp3,.wav}", (success, selectedPath) =>
-                     {
-                         if (success)
-                         {
-                             _configuration.CustomSoundPath = selectedPath;
-                             _configuration.Save();
-                         }
-                     });
-                }
-                ImGui.PopFont();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Browse for sound file");
-                
-                if (string.IsNullOrWhiteSpace(path))
-                {
-                     ImGui.TextDisabled("Default: Assets\\Completion.mp3");
-                }
-                else
-                {
-                     ImGui.TextDisabled($"Custom: {System.IO.Path.GetFileName(path)}");
-                     if (ImGui.IsItemHovered()) ImGui.SetTooltip(path);
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Confirmations", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-
-
-                bool disableDep = _configuration.DisableAskDepositAll;
-                if (ImGui.Checkbox("Skip Deposit Confirmation", ref disableDep))
-                {
-                    _configuration.DisableAskDepositAll = disableDep;
-                    _configuration.Save();
-                }
-                
-                bool disableWith = _configuration.DisableAskWithdrawAll;
-                if (ImGui.Checkbox("Skip Withdraw Confirmation", ref disableWith))
-                {
-                    _configuration.DisableAskWithdrawAll = disableWith;
-                    _configuration.Save();
-                }
-            }
-
-
-
-            // Deposit Rules
-            if (ImGui.CollapsingHeader("Deposit Rules", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-                bool lowerQuality = _configuration.LowerQualityOnDeposit;
-                if (ImGui.Checkbox("Lower the quality of items for deposit.", ref lowerQuality))
-                {
-                    _configuration.LowerQualityOnDeposit = lowerQuality;
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Automatically convert HQ items to NQ before depositing if enabled.");
-            }
-
-            // Withdraw Rules
-            if (ImGui.CollapsingHeader("Withdraw Rules", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-                bool leaveOne = _configuration.LeaveOneItemPerStack;
-                if (ImGui.Checkbox("Leave one item per stack.", ref leaveOne))
-                {
-                    _configuration.LeaveOneItemPerStack = leaveOne;
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Always leave at least 1 item in the FC Chest when withdrawing");
-            }
-
-            // Speed Settings
-            if (ImGui.CollapsingHeader("Delay Speeds", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-                ImGui.TextDisabled("For slow connections, set a higher delay to prevent desync.");
-                int depositDelay = _configuration.MoveDelayInMs;
-                if (ImGui.SliderInt("Deposit (ms)", ref depositDelay, 700, 1500))
-                {
-                    _configuration.MoveDelayInMs = depositDelay;
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Delay between deposit moves.");
-                
-                if (depositDelay < 700)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.6f, 0.0f, 1.0f));
-                    ImGui.TextWrapped("Fast mode - may cause sync issues on slow connections.");
-                    ImGui.PopStyleColor();
-                }
-                
-                ImGui.Separator();
-                
-                int withdrawDelay = _configuration.WithdrawDelayInMs;
-                if (ImGui.SliderInt("Withdraw (ms)", ref withdrawDelay, 700, 1500))
-                {
-                    _configuration.WithdrawDelayInMs = withdrawDelay;
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Delay between withdrawal moves. Slower is safer.");
-                
-                if (withdrawDelay < 700)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.6f, 0.0f, 1.0f));
-                    ImGui.TextWrapped("Low risk: Fast withdrawals may cause ghost items (desync). Fixed by zoning.");
-                    ImGui.PopStyleColor();
-                }
-                
-                ImGui.Separator();
-            }
-
-            // Debug
-            if (ImGui.CollapsingHeader("Debug", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.Framed))
-            {
-                bool debug = _configuration.DebugMode;
-                if (ImGui.Checkbox("Enable Debug Mode", ref debug))
-                {
-                    _configuration.DebugMode = debug;
-                    _configuration.Save();
-                }
-
-                string logPath = _configuration.DebugLogPath;
-                ImGui.SetNextItemWidth(200);
-                if (ImGui.InputTextWithHint("##logPath", "Log path...", ref logPath, 256))
-                {
-                    _configuration.DebugLogPath = logPath;
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Debug log file path");
-                
-                ImGui.SameLine();
-                ImGui.PushFont(UiBuilder.IconFont);
-                if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##logBrowse"))
-                {
-                    _fileDialogManager.SaveFileDialog("Select Log File", ".log", "FCCH_Debug.log", ".log", (success, selectedPath) =>
+                    bool playSound = _configuration.PlayCompletionSound;
+                    if (ImGui.Checkbox("##complSound", ref playSound))
                     {
-                        if (success)
-                        {
-                            _configuration.DebugLogPath = selectedPath;
-                            _configuration.Save();
-                        }
-                    });
-                }
-                ImGui.PopFont();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Browse save location");
+                        _configuration.PlayCompletionSound = playSound;
+                        _configuration.Save();
+                    }
+                });
 
-                bool verbose = _configuration.VerboseMode;
-                if (ImGui.Checkbox("Verbose Logging", ref verbose))
+                DrawSettingRow("Custom Sound Path", () =>
                 {
-                    _configuration.VerboseMode = verbose;
+                    string path = _configuration.CustomSoundPath;
+                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 35);
+                    if (ImGui.InputTextWithHint("##soundPath", "Default: Assets\\Completion.mp3", ref path, 1000))
+                    {
+                        _configuration.CustomSoundPath = path;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.PushFont(UiBuilder.IconFont);
+                    if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##soundBrowse"))
+                    {
+                        _fileDialogManager.OpenFileDialog("Select Sound File", "Audio Files{.mp3,.wav}", (success, selectedPath) =>
+                        {
+                            if (success)
+                            {
+                                _configuration.CustomSoundPath = selectedPath;
+                                _configuration.Save();
+                            }
+                        });
+                    }
+                    ImGui.PopFont();
+                });
+                ImGui.Spacing();
+
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Confirmations", ImGuiTreeNodeFlags.Leaf);
+
+                DrawSettingRow("Skip Deposit Confirm", () =>
+                {
+                    bool disableDep = _configuration.DisableAskDepositAll;
+                    if (ImGui.Checkbox("##skipDep", ref disableDep))
+                    {
+                        _configuration.DisableAskDepositAll = disableDep;
+                        _configuration.Save();
+                    }
+                });
+
+                DrawSettingRow("Skip Withdraw Confirm", () =>
+                {
+                    bool disableWith = _configuration.DisableAskWithdrawAll;
+                    if (ImGui.Checkbox("##skipWith", ref disableWith))
+                    {
+                        _configuration.DisableAskWithdrawAll = disableWith;
+                        _configuration.Save();
+                    }
+                });
+                ImGui.Spacing();
+
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Behavior Rules", ImGuiTreeNodeFlags.Leaf);
+
+                DrawSettingRow("Lower Quality on Deposit", () =>
+                {
+                    bool lowerQuality = _configuration.LowerQualityOnDeposit;
+                    if (ImGui.Checkbox("##lowerQual", ref lowerQuality))
+                    {
+                        _configuration.LowerQualityOnDeposit = lowerQuality;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.TextDisabled("(?)");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Automatically convert HQ items to NQ before depositing.");
+                });
+
+                DrawSettingRow("Leave One per Stack", () =>
+                {
+                    bool leaveOne = _configuration.LeaveOneItemPerStack;
+                    if (ImGui.Checkbox("##leaveOne", ref leaveOne))
+                    {
+                        _configuration.LeaveOneItemPerStack = leaveOne;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.TextDisabled("(?)");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Always leave at least 1 item in the FC Chest when withdrawing.");
+                });
+                ImGui.Spacing();
+
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Timing", ImGuiTreeNodeFlags.Leaf);
+
+                ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
+                if (ImGui.BeginChild("TimingWarning", new Vector2(ImGui.GetContentRegionAvail().X, 40), true))
+                {
+                    ImGui.TextColored(ImGuiColors.DalamudOrange, "Low delay may cause desync on slow connections.");
+                }
+                ImGui.EndChild();
+                ImGui.PopStyleColor();
+
+                ImGui.Spacing();
+
+                DrawSettingRow("Deposit Delay", () =>
+                {
+                    int depositDelay = _configuration.MoveDelayInMs;
+                    ImGui.SetNextItemWidth(180);
+                    if (ImGui.SliderInt("##depDelay", ref depositDelay, 700, 1500, "%d ms"))
+                    {
+                        _configuration.MoveDelayInMs = depositDelay;
+                        _configuration.Save();
+                    }
+                });
+
+                DrawSettingRow("Withdraw Delay", () =>
+                {
+                    int withdrawDelay = _configuration.WithdrawDelayInMs;
+                    ImGui.SetNextItemWidth(180);
+                    if (ImGui.SliderInt("##withDelay", ref withdrawDelay, 700, 1500, "%d ms"))
+                    {
+                        _configuration.WithdrawDelayInMs = withdrawDelay;
+                        _configuration.Save();
+                    }
+                });
+                ImGui.Spacing();
+
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Debug", ImGuiTreeNodeFlags.Leaf);
+
+                DrawSettingRow("Enable Debug Mode", () =>
+                {
+                    bool debug = _configuration.DebugMode;
+                    if (ImGui.Checkbox("##debugMode", ref debug))
+                    {
+                        _configuration.DebugMode = debug;
+                        _configuration.Save();
+                    }
+                });
+
+                DrawSettingRow("Custom Debug Path", () =>
+                {
+                    string logPath = _configuration.DebugLogPath;
+                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 35);
+                    if (ImGui.InputTextWithHint("##logPath", "Default: FCCH_Debug.log", ref logPath, 256))
+                    {
+                        _configuration.DebugLogPath = logPath;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.PushFont(UiBuilder.IconFont);
+                    if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##logBrowse"))
+                    {
+                        _fileDialogManager.SaveFileDialog("Select Log File", ".log", "FCCH_Debug.log", ".log", (success, selectedPath) =>
+                        {
+                            if (success)
+                            {
+                                _configuration.DebugLogPath = selectedPath;
+                                _configuration.Save();
+                            }
+                        });
+                    }
+                    ImGui.PopFont();
+                });
+
+                DrawSettingRow("Verbose Logging", () =>
+                {
+                    bool verbose = _configuration.VerboseMode;
+                    if (ImGui.Checkbox("##verbose", ref verbose))
+                    {
+                        _configuration.VerboseMode = verbose;
+                        _configuration.Save();
+                    }
+                });
+                ImGui.Spacing();
+
+                ImGui.Spacing();
+                ImGui.Separator();
+                ImGui.Spacing();
+
+                float buttonWidth = 130;
+                ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - buttonWidth) * 0.5f + ImGui.GetCursorPosX());
+                var style = ImGui.GetStyle();
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, style.Colors[(int)ImGuiCol.TabHovered]);
+                if (ImGui.Button("Reset to Defaults", new Vector2(buttonWidth, 0)))
+                {
+                    _configuration.PlayCompletionSound = false;
+                    _configuration.CustomSoundPath = "";
+                    _configuration.DisableAskDepositAll = false;
+                    _configuration.DisableAskWithdrawAll = false;
+                    _configuration.LowerQualityOnDeposit = false;
+                    _configuration.LeaveOneItemPerStack = false;
+                    _configuration.MoveDelayInMs = 700;
+                    _configuration.WithdrawDelayInMs = 700;
+                    _configuration.DebugMode = false;
+                    _configuration.DebugLogPath = "";
+                    _configuration.VerboseMode = false;
                     _configuration.Save();
                 }
+                ImGui.PopStyleColor();
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Reset all General settings to their default values.");
+
+                ImGui.EndChild();
             }
-            }
-            ImGui.EndChild();
+        }
+
+        private void DrawSettingRow(string label, System.Action drawControl)
+        {
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text(label);
+            ImGui.SameLine(180);
+            drawControl();
         }
     }
 }

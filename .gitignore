@@ -5,3 +5,5 @@ releases/
 *.user
 *.suo
 packages.lock.json
+*.log
+build*.txt

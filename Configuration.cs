@@ -3,7 +3,7 @@ using Dalamud.Plugin;
 using System;
 using System.Collections.Generic;
 
-namespace FC_Chest_Helper
+namespace FCCH
 {
     [Serializable]
     public class Configuration : IPluginConfiguration
@@ -41,10 +41,19 @@ namespace FC_Chest_Helper
         public bool LowerQualityOnDeposit { get; set; } = false;
         public bool PlayCompletionSound { get; set; } = false;
         public string CustomSoundPath { get; set; } = "";
-        
+
         public int MoveDelayInMs { get; set; } = 700;
         public int IndexingDelayInMs { get; set; } = 150;
         public int WithdrawDelayInMs { get; set; } = 700;
+        public double IndexingTimeoutSeconds { get; set; } = 3.0;
+
+        public GilDepositMode GilMode { get; set; } = GilDepositMode.Disabled;
+        public int GilPercentage { get; set; } = 100;
+        public uint GilFixedAmount { get; set; } = 0;
+        public uint GilAlwaysKeep { get; set; } = 0;
+        
+        public CrystalConfig CrystalConfig { get; set; } = new();
+
 
         [NonSerialized]
         private IDalamudPluginInterface? PluginInterface;
@@ -76,5 +85,21 @@ namespace FC_Chest_Helper
     {
         public uint WorkshopItemId { get; set; }
         public int Quantity { get; set; }
+    }
+
+    public enum GilDepositMode
+    {
+        Disabled = 0,
+        Percentage = 1,
+        FixedAmount = 2
+    }
+
+    public class CrystalConfig
+    {
+        public int GlobalKeepAmount { get; set; } = 0;
+        public bool IncludeInDepositAll { get; set; } = true;
+        public bool IncludeInWithdrawAll { get; set; } = false;
+        public HashSet<uint> EnabledIds { get; set; } = new();
+        public Dictionary<uint, int> CustomKeepAmounts { get; set; } = new();
     }
 }

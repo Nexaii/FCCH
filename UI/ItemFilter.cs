@@ -4,19 +4,16 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using Lumina.Excel.Sheets;
 
-namespace FC_Chest_Helper
+namespace FCCH.UI
 {
     public class ItemFilter
     {
         private readonly IDataManager _dataManager;
         
-        // Cache of Item IDs that have at least one recipe associated with them
         private HashSet<uint> _craftableItemIds = new();
         
-        // The final filtered list of items to display in the dropdown
         private List<Item> _filteredItems = new();
         
-        // For the UI search box
         private string _searchQuery = "";
         private Item? _selectedItem;
 
@@ -33,25 +30,17 @@ namespace FC_Chest_Helper
 
             if (recipeSheet == null || itemSheet == null) return;
 
-            // 1. Build the "Is Craftable" Cache
-            // We look at every recipe and grab the "ItemResult" ID.
-            // This effectively gives us a list of every item ID that can be crafted.
             foreach (var recipe in recipeSheet)
             {
                 _craftableItemIds.Add(recipe.ItemResult.RowId);
             }
 
-            // 2. Build the Filtered List
-            // We iterate over all Items and keep only those that match our 2 criteria:
-            // A) It is in our craftable cache
-            // B) It is NOT Untradable (IsUntradable == false means it can go in FC chest)
             foreach (var item in itemSheet)
             {
-                // Skip empty/invalid items
                 if (string.IsNullOrEmpty(item.Name.ToString())) continue;
 
                 bool isCraftable = _craftableItemIds.Contains(item.RowId);
-                bool isFcStorable = !item.IsUntradable; // If it's tradeable, it's FC storable
+                bool isFcStorable = !item.IsUntradable; 
                 
                 if (isCraftable && isFcStorable)
                 {
@@ -59,7 +48,6 @@ namespace FC_Chest_Helper
                 }
             }
             
-            // Sort by name for easier searching
             _filteredItems.Sort((a, b) => string.Compare(a.Name.ToString(), b.Name.ToString(), System.StringComparison.OrdinalIgnoreCase));
         }
 
@@ -71,17 +59,12 @@ namespace FC_Chest_Helper
 
         public void Draw()
         {
-            // A simple search box to filter the dropdown further (optional but recommended for long lists)
-            // ImGui.InputText("Search##ItemSearch", ref _searchQuery, 100); // Moved into combo for cleaner UI if possible, or keep separate
-
             if (ImGui.BeginCombo("Select Item", _selectedItem.HasValue ? _selectedItem.Value.Name.ToString() : "Select..."))
             {
-                // Search box inside the combo
                 ImGui.InputTextWithHint("##Search", "Search...", ref _searchQuery, 100);
                 
                 foreach (var item in _filteredItems)
                 {
-                    // Simple text filter for the UI rendering
                     if (!string.IsNullOrEmpty(_searchQuery) && 
                         !item.Name.ToString().Contains(_searchQuery, System.StringComparison.OrdinalIgnoreCase))
                     {

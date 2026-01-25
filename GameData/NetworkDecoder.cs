@@ -1,12 +1,13 @@
+using FCCH.Common;
 using System;
 
-namespace FC_Chest_Helper.GameData
+namespace FCCH.GameData
 {
     public static class NetworkDecoder
     {
-        public static unsafe Common.ContainerInfo DecodeContainerInfo(IntPtr dataPtr)
+        public static unsafe ContainerInfo DecodeContainerInfo(IntPtr dataPtr)
         {
-            return *(Common.ContainerInfo*)dataPtr;
+            return *(ContainerInfo*)dataPtr;
         }
     }
 }

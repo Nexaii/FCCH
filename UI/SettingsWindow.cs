@@ -1,31 +1,38 @@
 using System;
+using System.Diagnostics;
 using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
-using FC_Chest_Helper.GameData;
-using FC_Chest_Helper.UI;
+using FCCH.GameData;
+using FCCH.UI;
+using FCCH.Managers;
+using FCCH.Managers.Organizer;
 
 using Dalamud.Interface.ImGuiFileDialog;
 
-namespace FC_Chest_Helper.UI
+namespace FCCH.UI
 {
     public unsafe class SettingsWindow : Window, IDisposable
     {
-        private readonly FCChestHelper _helper;
+        private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
         private readonly IGameGui _gameGui;
         private readonly FileDialogManager _fileDialogManager;
+        private bool _wasChestVisible;
 
-        // UI Tabs
         private readonly GeneralTab _generalTab;
         private readonly IgnoreTab _ignoreTab;
-        private readonly SingleItemsTab _singleItemsTab;
+        private readonly CustomTab _customTab;
         private readonly WorkshopTab _workshopTab;
+        private readonly CrystalTabUI _crystalsTab;
+        private readonly OrganizerTab _organizerTab;
 
-        public SettingsWindow(FCChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration) 
+        private readonly TitleBarButton _kofiButton;
+
+        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService)
             : base("FCCH Settings###SettingsWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
         {
             _helper = helper;
@@ -34,30 +41,96 @@ namespace FC_Chest_Helper.UI
             _fileDialogManager = new FileDialogManager();
             RespectCloseHotkey = false;
             
-            this.Size = new Vector2(450, 600);
+            this.Size = new Vector2(520, 600);
             this.SizeCondition = ImGuiCond.FirstUseEver;
             this.SizeConstraints = new WindowSizeConstraints
             {
-                MinimumSize = new Vector2(380, 450),
-                MaximumSize = new Vector2(800, 1000)
+                MinimumSize = new Vector2(480, 450),
+                MaximumSize = new Vector2(900, 1000)
             };
 
-            _generalTab = new GeneralTab(configuration, _fileDialogManager); // Passed manager
+            _generalTab = new GeneralTab(configuration, _fileDialogManager);
             _ignoreTab = new IgnoreTab(helper, configuration);
-            _singleItemsTab = new SingleItemsTab(helper, configuration);
+            _customTab = new CustomTab(helper, configuration);
             _workshopTab = new WorkshopTab(helper, configuration, cache);
+            _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr);
+            _organizerTab = new OrganizerTab(orgService, configuration);
+
+            _kofiButton = new TitleBarButton
+            {
+                Icon = FontAwesomeIcon.Heart,
+                ShowTooltip = () => { ImGui.SetTooltip("Support on Ko-Fi"); },
+                Priority = int.MinValue,
+                IconOffset = new Vector2(1.5f, 1),
+                Click = _ => OpenKoFiLink(),
+                AvailableClickthrough = true,
+            };
+        }
+
+        private void OpenKoFiLink()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://ko-fi.com/nexai",
+                    UseShellExecute = true,
+                    Verb = string.Empty,
+                });
+            }
+            catch { }
         }
 
         public override void PreDraw()
         {
+            _organizerTab.Update();
             _fileDialogManager.Draw();
-            if (_configuration.IsWindowLocked)
+
+            if (!TitleBarButtons.Contains(_kofiButton))
+            {
+                TitleBarButtons.Add(_kofiButton);
+            }
+
+            var fcChestAddon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
+            bool isChestVisible = fcChestAddon != null && fcChestAddon->IsVisible;
+
+            if (isChestVisible && !_wasChestVisible)
+            {
+                this.Size = new Vector2(520, 600);
+                this.SizeCondition = ImGuiCond.Always;
+            }
+            else if (isChestVisible)
+            {
+                this.SizeCondition = ImGuiCond.None;
+            }
+            _wasChestVisible = isChestVisible;
+
+            if (_configuration.IsWindowLocked && isChestVisible)
             {
                 this.Flags |= ImGuiWindowFlags.NoMove;
             }
             else
             {
                 this.Flags &= ~ImGuiWindowFlags.NoMove;
+            }
+
+            this.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+            
+            if (isChestVisible && _configuration.IsWindowLocked)
+            {
+                this.SizeConstraints = new WindowSizeConstraints
+                {
+                    MinimumSize = new Vector2(480, 450),
+                    MaximumSize = new Vector2(560, 900)
+                };
+            }
+            else
+            {
+                this.SizeConstraints = new WindowSizeConstraints
+                {
+                    MinimumSize = new Vector2(480, 450),
+                    MaximumSize = new Vector2(900, 1000)
+                };
             }
             base.PreDraw();
         }
@@ -72,7 +145,6 @@ namespace FC_Chest_Helper.UI
         {
             var addon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
             
-            // Positioning logic only if Addon is visible and we want to attach
             if (addon != null && addon->IsVisible)
             {
                 var myWidth = ImGui.GetWindowSize().X;
@@ -111,9 +183,21 @@ namespace FC_Chest_Helper.UI
                     ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("Singles")) 
+                if (ImGui.BeginTabItem("Crystals"))
                 {
-                    _singleItemsTab.Draw();
+                    _crystalsTab.Draw();
+                    ImGui.EndTabItem();
+                }
+
+                if (ImGui.BeginTabItem("Custom"))
+                {
+                    _customTab.Draw();
+                    ImGui.EndTabItem();
+                }
+
+                if (ImGui.BeginTabItem("Organizer"))
+                {
+                    _organizerTab.Draw();
                     ImGui.EndTabItem();
                 }
 
@@ -123,7 +207,6 @@ namespace FC_Chest_Helper.UI
                     ImGui.EndTabItem();
                 }
 
-                // Switch Side Tab
                 var switchIcon = _configuration.ListsOnRightSide ? FontAwesomeIcon.AngleLeft.ToIconString() : FontAwesomeIcon.AngleRight.ToIconString();
                 
                 ImGui.PushFont(UiBuilder.IconFont);
@@ -142,7 +225,7 @@ namespace FC_Chest_Helper.UI
 
         public void Dispose()
         {
-            // No unmanaged resources to dispose in tabs atm
+            _organizerTab?.Dispose();
         }
     }
 }

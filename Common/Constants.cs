@@ -1,4 +1,4 @@
-namespace FC_Chest_Helper.Common
+namespace FCCH.Common
 {
     public static class Constants
     {

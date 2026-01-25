@@ -6,10 +6,10 @@ using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using FC_Chest_Helper.Common;
-using FC_Chest_Helper.GameData;
+using FCCH.Common;
+using FCCH.GameData;
 
-namespace FC_Chest_Helper
+namespace FCCH.Managers
 {
     public unsafe class InventoryScanner : IDisposable
     {
@@ -17,18 +17,18 @@ namespace FC_Chest_Helper
         
         private delegate void* ContainerInfoNetworkData(int a2, int* a3);
         
-        // Thanks to Critical Impact (Allagan Tools) for this signature.
         [Signature("48 89 74 24 ?? 57 48 81 EC ?? ?? ?? ?? 44 0F B7 42 ??",
                    DetourName = nameof(ContainerInfoDetour), UseFlags = SignatureUseFlags.Hook)]
         private Hook<ContainerInfoNetworkData>? _containerInfoHook = null;
         
-        // FC Chest Pages
         private static readonly InventoryType[] FC_PAGES = {
             InventoryType.FreeCompanyPage1,
             InventoryType.FreeCompanyPage2,
             InventoryType.FreeCompanyPage3,
             InventoryType.FreeCompanyPage4,
             InventoryType.FreeCompanyPage5,
+            InventoryType.FreeCompanyGil,
+            InventoryType.FreeCompanyCrystals,
         };
 
         public InventoryScanner()
@@ -39,7 +39,12 @@ namespace FC_Chest_Helper
 
         public void Dispose()
         {
-            _containerInfoHook?.Dispose();
+            if (_containerInfoHook != null)
+            {
+                if (_containerInfoHook.IsEnabled)
+                    _containerInfoHook.Disable();
+                _containerInfoHook.Dispose();
+            }
             _loadedInventories.Clear();
         }
         
@@ -90,23 +95,17 @@ namespace FC_Chest_Helper
                 {
                     _loadedInventories.Add(page);
                 }
-                else
-                {
-                    _loadedInventories.Remove(page);
-                }
+
             }
         }
         
         public bool IsInventoryLoaded(InventoryType type)
         {
-            // For FC pages, we strictly check our tracked state which requires Addon visibility.
             if (IsFCPage(type))
             {
                 return _loadedInventories.Contains(type);
             }
             
-            // For other inventories (player bags), we can trust InventoryManager directly for now.
-            // Or we can add them to _loadedInventories if we want to be consistent.
             var container = InventoryManager.Instance()->GetInventoryContainer(type);
             return container != null && container->IsLoaded;
         }
@@ -118,12 +117,10 @@ namespace FC_Chest_Helper
         
         public InventoryContainer* GetContainer(InventoryType type)
         {
-            // For FC pages, still require loaded check to prevent stale reads
             if (IsFCPage(type))
             {
                 if (!IsInventoryLoaded(type)) return null;
             }
-            // For player inventory, always return - game memory is always valid
             return InventoryManager.Instance()->GetInventoryContainer(type);
         }
     }

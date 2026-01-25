@@ -1,7 +1,7 @@
 using Lumina.Data;
 using Lumina.Excel;
 
-namespace FC_Chest_Helper.GameData
+namespace FCCH.GameData
 {
     [Sheet("CompanyCraftSupplyItem")]
     public readonly struct CompanyCraftSupplyItem(ExcelPage page, uint offset, uint row) : IExcelRow<CompanyCraftSupplyItem>
@@ -11,7 +11,7 @@ namespace FC_Chest_Helper.GameData
         public uint RowOffset => offset;
         public ExcelPage ExcelPage => page;
 
-        public uint Item => page.ReadUInt32(offset); // Offset 0
+        public uint Item => page.ReadUInt32(offset);
 
         static CompanyCraftSupplyItem IExcelRow<CompanyCraftSupplyItem>.Create(ExcelPage page, uint offset, uint row) => new(page, offset, row);
     }
@@ -24,7 +24,6 @@ namespace FC_Chest_Helper.GameData
         public uint RowOffset => offset;
         public ExcelPage ExcelPage => page;
 
-        // Offsets shifted by 4 to account for 'Order' column at index 0
         public uint ResultItem => page.ReadUInt32(offset + 4);
         public int Category => page.ReadInt32(offset + 8);
         public uint CompanyCraftDraftCategory => page.ReadUInt32(offset + 12);

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace FC_Chest_Helper.GameData;
+namespace FCCH.GameData;
 
 public sealed class WorkshopCraft
 {

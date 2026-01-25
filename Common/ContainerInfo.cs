@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace FC_Chest_Helper.Common
+namespace FCCH.Common
 {
     [StructLayout(LayoutKind.Explicit, Size = 32)]
     public struct ContainerInfo

@@ -1,10 +1,10 @@
-using FC_Chest_Helper.GameData;
+using FCCH.GameData;
 
-namespace FC_Chest_Helper.Models
+namespace FCCH.Models
 {
     public class ShoppingItem
     {
-        public WorkshopCraft Craft { get; set; } = null!;
+        public required WorkshopCraft Craft { get; set; }
         public int Quantity { get; set; }
     }
 }

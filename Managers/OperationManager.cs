@@ -3,29 +3,30 @@ using System.Collections.Generic;
 using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using FC_Chest_Helper.Common;
-using FC_Chest_Helper.Managers;
-using FC_Chest_Helper.Models;
+using FCCH.Common;
+using FCCH.Models;
 
-namespace FC_Chest_Helper.Logic
+namespace FCCH.Managers
 {
-    public unsafe static class OperationLogic
+    public unsafe static class OperationManager
     {
-
         public static (InventoryType, int)? FindEmptyFCSlot(List<ChestManager.ScannedSlot> virtualFC, List<InventoryType> availableTabs, InventoryType? preferredPage = null, bool strict = false)
         {
+            var occupiedSlots = new HashSet<(InventoryType, int)>();
+            foreach (var slot in virtualFC)
+                occupiedSlots.Add((slot.Page, (int)slot.Slot));
+
             if (preferredPage.HasValue && availableTabs.Contains(preferredPage.Value))
             {
                 for (int i = 0; i < Constants.FC_CHEST_PAGE_SIZE; i++)
                 {
-                    bool occupied = virtualFC.Any(x => x.Page == preferredPage.Value && x.Slot == i);
-                    if (!occupied)
+                    if (!occupiedSlots.Contains((preferredPage.Value, i)))
                     {
                         return (preferredPage.Value, i);
                     }
                 }
             }
-            
+
             if (strict) return null;
 
             foreach (var page in availableTabs)
@@ -34,8 +35,7 @@ namespace FC_Chest_Helper.Logic
 
                 for (int i = 0; i < Constants.FC_CHEST_PAGE_SIZE; i++)
                 {
-                    bool occupied = virtualFC.Any(x => x.Page == page && x.Slot == i);
-                    if (!occupied)
+                    if (!occupiedSlots.Contains((page, i)))
                     {
                         return (page, i);
                     }
@@ -47,14 +47,26 @@ namespace FC_Chest_Helper.Logic
         public static List<(uint ItemId, uint Remaining)> LastDepositOverflow { get; private set; } = new();
 
         public static List<MoveOperation> CalculateDepositMoves(
-            ChestManager chestManager, 
-            Configuration config, 
+            ChestManager chestManager,
+            Configuration config,
             InventoryType[] playerInvTypes)
         {
             var moves = new List<MoveOperation>();
             var virtualFC = chestManager.CachedItems.ToList();
-            var availableTabs = chestManager.GetAvailableTabs();
+            var availableTabs = chestManager.GetDepositableTabs();
             LastDepositOverflow.Clear();
+
+            var stacksByItemId = new Dictionary<uint, List<ChestManager.ScannedSlot>>();
+            var occupiedSlots = new HashSet<(InventoryType, uint)>();
+            foreach (var slot in virtualFC)
+            {
+                occupiedSlots.Add((slot.Page, slot.Slot));
+                if (!stacksByItemId.ContainsKey(slot.ItemId))
+                    stacksByItemId[slot.ItemId] = new List<ChestManager.ScannedSlot>();
+                stacksByItemId[slot.ItemId].Add(slot);
+            }
+
+            var itemSheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
 
             foreach (var type in playerInvTypes)
             {
@@ -70,17 +82,18 @@ namespace FC_Chest_Helper.Logic
                     bool isUntradable = false;
                     try
                     {
-                        var sheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
-                        var row = sheet?.GetRowOrDefault(item->ItemId);
+                        var row = itemSheet?.GetRowOrDefault(item->ItemId);
                         if (row != null)
                         {
                             itemMaxStack = row.Value.StackSize;
                             isUntradable = row.Value.IsUntradable;
                         }
                     }
-                    catch { /* Fall back to defaults if lookup fails */ }
+                    catch { }
 
                     if (isUntradable) continue;
+
+                    if (config.CrystalConfig.EnabledIds.Contains(item->ItemId)) continue;
 
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
@@ -89,10 +102,9 @@ namespace FC_Chest_Helper.Logic
                     bool isHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality;
                     uint srcSlot = (uint)i;
 
-                    var partialStacks = virtualFC
-                        .Where(x => x.ItemId == item->ItemId && x.Quantity < x.MaxStack)
-                        .OrderBy(x => x.Page).ThenBy(x => x.Slot)
-                        .ToList();
+                    var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
+                        ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        : new List<ChestManager.ScannedSlot>();
                     
                     foreach (var stack in partialStacks)
                     {
@@ -137,7 +149,7 @@ namespace FC_Chest_Helper.Logic
                             IsNativeMove = true
                         });
 
-                        virtualFC.Add(new ChestManager.ScannedSlot
+                        var newSlot = new ChestManager.ScannedSlot
                         {
                             Page = empty.Value.Item1,
                             Slot = (uint)empty.Value.Item2,
@@ -145,14 +157,19 @@ namespace FC_Chest_Helper.Logic
                             Quantity = transfer,
                             IsHq = isHq,
                             MaxStack = itemMaxStack
-                        });
+                        };
+                        virtualFC.Add(newSlot);
+                        occupiedSlots.Add((newSlot.Page, newSlot.Slot));
+                        if (!stacksByItemId.ContainsKey(newSlot.ItemId))
+                            stacksByItemId[newSlot.ItemId] = new List<ChestManager.ScannedSlot>();
+                        stacksByItemId[newSlot.ItemId].Add(newSlot);
 
                         remainingToDeposit -= transfer;
                     }
 
                     if (remainingToDeposit > 0)
                     {
-                        bool existsInFC = virtualFC.Any(x => x.ItemId == item->ItemId);
+                        bool existsInFC = stacksByItemId.ContainsKey(item->ItemId);
                         if (existsInFC)
                         {
                             var existing = LastDepositOverflow.FindIndex(x => x.ItemId == item->ItemId);
@@ -165,18 +182,42 @@ namespace FC_Chest_Helper.Logic
                 }
             }
 
+            if (LastDepositOverflow.Count > 0)
+            {
+                var failureCounts = new Dictionary<string, int>();
+                failureCounts["Inventory/Stack Full"] = LastDepositOverflow.Count;
+                ChatHelper.PrintBatchWarnings(failureCounts);
+            }
+
             moves.Sort((a, b) => a.DstInv.CompareTo(b.DstInv) != 0 ? a.DstInv.CompareTo(b.DstInv) : a.DstSlot.CompareTo(b.DstSlot));
 
             return moves;
         }
 
         public static List<MoveOperation> CalculateDuplicateMoves(
-            ChestManager chestManager, 
-            Configuration config, 
+            ChestManager chestManager,
+            Configuration config,
             InventoryType[] playerInvTypes)
         {
             var moves = new List<MoveOperation>();
-            var virtualFC = chestManager.CachedItems.ToList(); 
+            var virtualFC = chestManager.CachedItems.ToList();
+            var availableTabs = chestManager.GetDepositableTabs();
+
+            var stacksByItemId = new Dictionary<uint, List<ChestManager.ScannedSlot>>();
+            var occupiedSlots = new HashSet<(InventoryType, uint)>();
+            var pagesByItemId = new Dictionary<uint, HashSet<InventoryType>>();
+            foreach (var slot in virtualFC)
+            {
+                occupiedSlots.Add((slot.Page, slot.Slot));
+                if (!stacksByItemId.ContainsKey(slot.ItemId))
+                    stacksByItemId[slot.ItemId] = new List<ChestManager.ScannedSlot>();
+                stacksByItemId[slot.ItemId].Add(slot);
+                if (!pagesByItemId.ContainsKey(slot.ItemId))
+                    pagesByItemId[slot.ItemId] = new HashSet<InventoryType>();
+                pagesByItemId[slot.ItemId].Add(slot.Page);
+            }
+
+            var itemSheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
 
             foreach (var type in playerInvTypes)
             {
@@ -188,14 +229,12 @@ namespace FC_Chest_Helper.Logic
                     var item = container->GetInventorySlot(i);
                     if (item == null || item->ItemId == 0) continue;
 
-                    // Deposit full quantity (Leave 1 only applies to FC chest withdrawals)
                     uint remainingToDeposit = (uint)item->Quantity;
 
                     uint itemMaxStack = 999;
                     try
                     {
-                        var sheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
-                        var row = sheet?.GetRowOrDefault(item->ItemId);
+                        var row = itemSheet?.GetRowOrDefault(item->ItemId);
                         if (row != null)
                         {
                             itemMaxStack = row.Value.StackSize;
@@ -203,14 +242,15 @@ namespace FC_Chest_Helper.Logic
                     }
                     catch { }
 
+                    if (config.CrystalConfig.EnabledIds.Contains(item->ItemId)) continue;
+
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
                     uint srcSlot = (uint)i;
 
-                    var partialStacks = virtualFC
-                        .Where(x => x.ItemId == item->ItemId && x.Quantity < x.MaxStack)
-                        .OrderBy(x => x.Page).ThenBy(x => x.Slot)
-                        .ToList();
+                    var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
+                        ? stacks.Where(x => x.Quantity < x.MaxStack && availableTabs.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        : new List<ChestManager.ScannedSlot>();
 
                     foreach (var stack in partialStacks)
                     {
@@ -239,12 +279,9 @@ namespace FC_Chest_Helper.Logic
 
                     if (remainingToDeposit > 0)
                     {
-                        var presentPages = virtualFC
-                            .Where(x => x.ItemId == item->ItemId)
-                            .Select(x => x.Page)
-                            .Distinct()
-                            .OrderBy(x => x)
-                            .ToList();
+                        var presentPages = pagesByItemId.TryGetValue(item->ItemId, out var pages)
+                            ? pages.Where(p => availableTabs.Contains(p)).OrderBy(x => x).ToList()
+                            : new List<InventoryType>();
 
                         if (presentPages.Count > 0)
                         {
@@ -256,8 +293,7 @@ namespace FC_Chest_Helper.Logic
                                 {
                                     if (remainingToDeposit == 0) break;
 
-                                    bool occupied = virtualFC.Any(x => x.Page == targetPage && x.Slot == s);
-                                    if (!occupied)
+                                    if (!occupiedSlots.Contains((targetPage, s)))
                                     {
                                         uint transfer = Math.Min(remainingToDeposit, itemMaxStack);
 
@@ -272,7 +308,7 @@ namespace FC_Chest_Helper.Logic
                                             IsNativeMove = true
                                         });
 
-                                        virtualFC.Add(new ChestManager.ScannedSlot
+                                        var newSlot = new ChestManager.ScannedSlot
                                         {
                                             Page = targetPage,
                                             Slot = s,
@@ -280,7 +316,12 @@ namespace FC_Chest_Helper.Logic
                                             Quantity = transfer,
                                             IsHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality,
                                             MaxStack = itemMaxStack
-                                        });
+                                        };
+                                        virtualFC.Add(newSlot);
+                                        occupiedSlots.Add((targetPage, s));
+                                        if (!stacksByItemId.ContainsKey(item->ItemId))
+                                            stacksByItemId[item->ItemId] = new List<ChestManager.ScannedSlot>();
+                                        stacksByItemId[item->ItemId].Add(newSlot);
 
                                         remainingToDeposit -= transfer;
                                     }
@@ -290,7 +331,7 @@ namespace FC_Chest_Helper.Logic
                     }
                 }
             }
-            
+
             moves.Sort((a, b) => a.DstInv.CompareTo(b.DstInv) != 0 ? a.DstInv.CompareTo(b.DstInv) : a.DstSlot.CompareTo(b.DstSlot));
 
             return moves;
@@ -327,6 +368,8 @@ namespace FC_Chest_Helper.Logic
             {
                 uint itemId = req.Key;
                 
+                if (config.CrystalConfig.EnabledIds.Contains(itemId)) continue;
+
                 if (config.IgnoreList.Any(x => x.ItemId == itemId && x.IgnoreWithdraw)) continue;
 
                 int amountNeeded = req.Value;
@@ -353,7 +396,7 @@ namespace FC_Chest_Helper.Logic
                         var dst = FindSpaceInPlayerInventory(playerSlots, itemId, chestSlot.IsHq, playerInvTypes, 1, chestSlot.MaxStack);
                         if (dst.Type == InventoryType.Invalid) break;
 
-                        var currentSlot = playerSlots[(dst.Type, dst.Slot)];
+                        if (!playerSlots.TryGetValue((dst.Type, dst.Slot), out var currentSlot)) break;
                         uint playerSpace = chestSlot.MaxStack - currentSlot.Quantity;
                         uint transfer = Math.Min(remainingFromThisSlot, playerSpace);
 
@@ -385,6 +428,13 @@ namespace FC_Chest_Helper.Logic
                             LastWithdrawOverflow.Add((itemId, remainingFromThisSlot));
                     }
                 }
+            }
+
+            if (LastWithdrawOverflow.Count > 0)
+            {
+                var failureCounts = new Dictionary<string, int>();
+                failureCounts["Player Inventory Full"] = LastWithdrawOverflow.Count;
+                ChatHelper.PrintBatchWarnings(failureCounts);
             }
 
             moves.Sort((a, b) => a.SrcInv.CompareTo(b.SrcInv) != 0 ? a.SrcInv.CompareTo(b.SrcInv) : a.SrcSlot.CompareTo(b.SrcSlot));
@@ -440,7 +490,6 @@ namespace FC_Chest_Helper.Logic
             bool stackOnly = false,
             bool emptyOnly = false)
         {
-            // Try to stack
             if (!emptyOnly)
             {
                 foreach (var type in types)
@@ -474,7 +523,7 @@ namespace FC_Chest_Helper.Logic
                     var key = (type, i);
                     if (!quantities.ContainsKey(key)) continue;
 
-                    if (quantities[key] == 0) // Empty
+                    if (quantities[key] == 0) 
                     {
                         return (type, i);
                     }
