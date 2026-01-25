@@ -319,28 +319,9 @@ namespace FCCH.UI
 
         public override void Draw()
         {
-            int total, completed;
-            if (_orgService.JobStatus == OrgJobStatus.Running)
-            {
-                total = _orgService.TotalMoves;
-                completed = _orgService.CompletedMoves;
-            }
-            else
-            {
-                total = _helper.MoveManager.TotalQueued;
-                completed = _helper.MoveManager.CompletedCount;
-            }
-            float progress = total > 0 ? (float)completed / total : 0f;
-            int percent = (int)(progress * 100);
-
             ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiColors.HealerGreen, $"Processing: {percent}%");
+            ImGui.TextColored(ImGuiColors.HealerGreen, "Processing...");
             ImGui.SameLine();
-            
-            ImGui.SetNextItemWidth(120);
-            ImGui.ProgressBar(progress, new Vector2(120, 0), "");
-            ImGui.SameLine();
-            
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGuiColors.DalamudRed);
             ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGuiColors.DalamudRed);
             if (ImGui.Button("Stop"))
