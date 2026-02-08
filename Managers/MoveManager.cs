@@ -109,7 +109,7 @@ namespace FCCH.Managers
                 DebugLog($"[ExecuteMove] Source container {op.SrcInv} is null. Skipping.");
                 return;
             }
-            if (dstContainer == null)
+            if (dstContainer == null && !(op.ItemId == 1 && op.IsNativeMove))
             {
                 DebugLog($"[ExecuteMove] Destination container {op.DstInv} is null. Skipping.");
                 return;
@@ -148,7 +148,7 @@ namespace FCCH.Managers
             {
                 if (op.ItemId == 1)
                 {
-                    ChatHelper.Info($"[MoveManager] Processing Gil Transaction: {op.Amount:N0}");
+                    ChatHelper.Verbose($"Processing Gil Transaction: {op.Amount:N0}");
                     if (op.IsNativeMove && _moveItemWithQuantity != null)
                     {
                         _moveItemWithQuantity((IntPtr)invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, op.Amount);
@@ -222,6 +222,11 @@ namespace FCCH.Managers
             catch { }
         }
         
+        public void SetDelay()
+        {
+            LastActionTime = DateTime.Now;
+        }
+
         public void Clear()
         {
             MoveQueue.Clear();

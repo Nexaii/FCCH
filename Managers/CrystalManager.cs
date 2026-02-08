@@ -57,6 +57,7 @@ namespace FCCH.Managers
 
         public void DepositDuplicates()
         {
+            if (!_configuration.CrystalConfig.IncludeInDepositAll) return;
             InvalidateCache();
             foreach (var id in AllIds)
             {

@@ -59,7 +59,6 @@ namespace FCCH.Common
                 if (string.IsNullOrWhiteSpace(clipboard))
                     return (ImportResult.EmptyClipboard, default);
 
-                // Check header
                 if (!clipboard.StartsWith(expectedHeader))
                 {
                     // Quick check if it's a different FCCH tab
@@ -68,7 +67,6 @@ namespace FCCH.Common
                     return (ImportResult.InvalidFormat, default);
                 }
 
-                // Remove header and decode
                 string encoded = clipboard.Substring(expectedHeader.Length);
                 string json = Decode(encoded);
                 

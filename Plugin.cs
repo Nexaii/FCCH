@@ -41,7 +41,7 @@ namespace FCCH
         private GilManager GilManager { get; init; }
         private OrgService OrgService { get; init; }
 
-        public Configuration Configuration { get; init; }
+        public static Configuration Configuration { get; private set; } = null!;
 
         public Plugin()
         {

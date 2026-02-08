@@ -1,5 +1,6 @@
 using System;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
 using FCCH.Models;
 
@@ -53,19 +54,16 @@ namespace FCCH.Managers.Gil
                 Timestamp = DateTime.Now
             });
 
-            var moveOp = new MoveOperation
+            var bank = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("Bank", 1);
+            if (bank != null && bank->IsVisible)
             {
-                SrcInv = InventoryType.Currency,
-                SrcSlot = 0,
-                DstInv = InventoryType.FreeCompanyGil,
-                DstSlot = 0,
-                ItemId = 1,
-                Amount = finalAmount,
-                IsNativeMove = true
-            };
-
-            _moveManager.Enqueue(moveOp);
-            ChatHelper.Info($"Queued deposit of {finalAmount:N0} Gil.");
+                FireBankDeposit(bank, finalAmount);
+            }
+            else
+            {
+                SwitchToGilTab();
+                ChatHelper.Verbose($"Queued deposit of {finalAmount:N0} Gil.");
+            }
         }
 
         public void ExecuteWithdraw(uint amount)
@@ -115,7 +113,7 @@ namespace FCCH.Managers.Gil
             };
             
             _moveManager.Enqueue(moveOp);
-            ChatHelper.Info($"Queued withdrawal of {finalAmount:N0} Gil.");
+            ChatHelper.Verbose($"Queued withdrawal of {finalAmount:N0} Gil.");
         }
 
         public void AutoDeposit()
@@ -148,18 +146,29 @@ namespace FCCH.Managers.Gil
                 Timestamp = DateTime.Now
             });
 
-            var moveOp = new MoveOperation
+            var bank = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("Bank", 1);
+            if (bank != null && bank->IsVisible)
             {
-                SrcInv = InventoryType.Currency,
-                SrcSlot = 0,
-                DstInv = InventoryType.FreeCompanyGil,
-                DstSlot = 0,
-                ItemId = 1,
-                Amount = validationResult.AdjustedAmount,
-                IsNativeMove = true
-            };
+                FireBankDeposit(bank, validationResult.AdjustedAmount);
+            }
+            else
+            {
+                SwitchToGilTab();
+            }
+        }
 
-            _moveManager.Enqueue(moveOp);
+        private static void FireBankDeposit(AtkUnitBase* bank, uint amount)
+        {
+            Callback.Fire(bank, true, 3, amount);
+            Callback.Fire(bank, true, 0);
+        }
+
+        private void SwitchToGilTab()
+        {
+            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            if (addon == null || !addon->IsVisible) return;
+
+            Callback.Fire(addon, true, 2);
         }
     }
 

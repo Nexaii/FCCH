@@ -18,6 +18,7 @@ namespace FCCH.Managers
         private InventoryType _targetPage = InventoryType.Invalid;
         private Queue<InventoryType> _queue = new();
         private bool _autoDumpAfterIndexing = false;
+        private int _tabCount = 0;
 
         public IndexingPhase Phase => _phase;
         public bool IsIdle => _phase == IndexingPhase.Idle;
@@ -37,9 +38,9 @@ namespace FCCH.Managers
 
             if (_queue.Count > 0)
             {
+                _tabCount = _queue.Count;
                 _targetPage = _queue.Dequeue();
                 _phase = IndexingPhase.Switching;
-                ChatHelper.Info($"Starting re-index ({_queue.Count + 1} pages)...");
             }
         }
 
@@ -87,7 +88,7 @@ namespace FCCH.Managers
                     else
                     {
                         _phase = IndexingPhase.Idle;
-                        ChatHelper.Info("Re-indexing complete.");
+                        ChatHelper.Info($"Indexed {_tabCount} tabs.");
 
                         if (_configuration.DebugMode)
                         {

@@ -59,6 +59,18 @@ namespace FCCH.Common
             Plugin.Chat.Print(seString);
         }
 
+        public static void Verbose(string message)
+        {
+            if (!Plugin.Configuration.VerboseMode) return;
+            var seString = new SeStringBuilder()
+                .AddUiForeground(ColorGreen)
+                .AddText("[FCCH]")
+                .AddUiForegroundOff()
+                .AddText($" {message}")
+                .Build();
+            Plugin.Chat.Print(seString);
+        }
+
         public static void PrintBatchWarnings(System.Collections.Generic.Dictionary<string, int> failures)
         {
             if (failures == null || failures.Count == 0) return;

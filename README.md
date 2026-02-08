@@ -2,9 +2,9 @@
   <h1>FCCH</h1>
   <h3>Free Company Chest Helper</h3>
   <p>
-    Automated inventory auditing and management for Final Fantasy XIV.
+    Automated Free Company Chest management for Final Fantasy XIV.
     <br />
-    <a href="#-features">Features</a> · <a href="#-installation">Installation</a> · <a href="#-usage">Usage</a>
+    <a href="#features">Features</a> · <a href="#installation">Installation</a> · <a href="#commands">Commands</a>
   </p>
 <p align="center">
     <a href="https://ko-fi.com/nexai">
@@ -15,12 +15,17 @@
 
 </div>
 
+**Plugin Repository**
+```
+https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
+```
+
 ---
 
-## 📖 About
+## About
 **FCCH** – Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.
 
-## ✨ Features
+## Features
 
 ### Deposit Tools
 - **Deposit All** – Deposits all eligible items from your inventory.
@@ -43,7 +48,7 @@
 - **Leave One per Stack** – Preserve slot reservations by keeping 1 item per stack.
 - **Export/Import** – Share lists via clipboard.
 
-## 🚀 Installation
+## Installation
 1. **Prerequisites**: [FFXIVQuickLauncher](https://github.com/goatcorp/FFXIVQuickLauncher) with Dalamud enabled.
 2. **Add Repository**: `/xlsettings` → Experimental → Custom Plugin Repositories:
    ```
@@ -51,7 +56,7 @@
    ```
 3. **Install**: `/xlplugins` → Search **FCCH** → Install.
 
-## 📋 Commands
+## Commands
 
 | Command | Description |
 | :--- | :--- |
@@ -63,7 +68,8 @@
 | `/fcch ws` | Withdraw Custom List |
 | `/fcch wc` | Withdraw Crystals |
 | `/fcch wp` | Withdraw Workshop |
-| `/fcch gd <amount>` | Deposit Gil (supports `15k`, `5m`, `all`) |
+| `/fcch gd <amount>` | Deposit Gil |
 | `/fcch gw <amount>` | Withdraw Gil |
 | `/fcch info` | Show FC rank, permissions, and tab access |
 
+> **Amount Shorthand:** Gil commands accept raw numbers (`5000`), thousands (`5k`, `15k`), or millions (`1m`, `2.5m`).

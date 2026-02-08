@@ -29,6 +29,7 @@ namespace FCCH.Managers.Gil
 
             InitializeDebugHook();
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, INPUT_NUMERIC_ADDON, OnInputNumericSetup);
+            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "Bank", OnBankSetup);
         }
 
         private void SetPendingTransaction(PendingGilTransaction transaction)
@@ -69,6 +70,36 @@ namespace FCCH.Managers.Gil
             }
         }
 
+        private void OnBankSetup(AddonEvent type, AddonArgs args)
+        {
+            var pending = _pendingTransaction;
+            if (pending == null) return;
+
+            var transaction = pending.Value;
+            if (!transaction.IsDeposit) return;
+            if ((DateTime.Now - transaction.Timestamp).TotalSeconds > 5)
+            {
+                _pendingTransaction = null;
+                return;
+            }
+
+            var addon = (AtkUnitBase*)(nint)args.Addon;
+            if (addon == null) return;
+
+            try
+            {
+                Callback.Fire(addon, true, 3, (uint)transaction.Amount);
+                Callback.Fire(addon, true, 0);
+                _pendingTransaction = null;
+                ChatHelper.Info($"Deposited {transaction.Amount:N0} Gil.");
+            }
+            catch (Exception ex)
+            {
+                Plugin.PluginLog.Error(ex, "[GilManager] Failed to handle Bank deposit");
+                _pendingTransaction = null;
+            }
+        }
+
         private void InitializeDebugHook()
         {
             try
@@ -89,11 +120,11 @@ namespace FCCH.Managers.Gil
             try
             {
                 var addonName = addon->NameString;
-                if (addonName == INPUT_NUMERIC_ADDON && _debugMode)
+                if (_debugMode && (addonName == INPUT_NUMERIC_ADDON || addonName == FCCH.Common.Constants.FC_CHEST_ADDON_NAME || addonName == "Bank"))
                 {
-                    ChatHelper.Info($"[DEBUG] InputNumeric Callback Intercepted!");
+                    ChatHelper.Info($"[DEBUG] {addonName} Callback Intercepted!");
                     ChatHelper.Info($"[DEBUG] valueCount={valueCount}, updateState={updateState}");
-                    
+
                     for (int i = 0; i < valueCount && i < 10; i++)
                     {
                         var val = values[i];
@@ -250,6 +281,7 @@ namespace FCCH.Managers.Gil
             _fireCallbackHook?.Disable();
             _fireCallbackHook?.Dispose();
             Plugin.AddonLifecycle.UnregisterListener(OnInputNumericSetup);
+            Plugin.AddonLifecycle.UnregisterListener(OnBankSetup);
         }
     }
 }

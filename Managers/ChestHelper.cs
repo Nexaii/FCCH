@@ -278,10 +278,7 @@ namespace FCCH.Managers
         
         public void VerboseLog(string msg)
         {
-            if (_configuration.VerboseMode)
-            {
-                ChatHelper.Info($"[Verbose] {msg}");
-            }
+            ChatHelper.Verbose(msg);
         }
 
         public void Dispose()
