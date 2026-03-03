@@ -19,6 +19,7 @@ namespace FCCH.UI
         private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
         private readonly WorkshopCache _cache;
+        private readonly Common.WorkshoppaIPC _ipc;
 
         private string _searchFilter = "";
 
@@ -28,11 +29,12 @@ namespace FCCH.UI
 
         private HashSet<int> _expandedProjects = new HashSet<int>();
 
-        public WorkshopTab(ChestHelper helper, Configuration configuration, WorkshopCache cache)
+        public WorkshopTab(ChestHelper helper, Configuration configuration, WorkshopCache cache, Common.WorkshoppaIPC workshoppaIpc)
         {
             _helper = helper;
             _configuration = configuration;
             _cache = cache;
+            _ipc = workshoppaIpc;
         }
 
         public void Draw()
@@ -44,10 +46,12 @@ namespace FCCH.UI
             int missingCount = totalMats.Count(m => m.Have < m.Need);
             int projectCount = _helper.ShoppingList.Count;
 
-            if (ImGui.BeginTable("##workshopHeader", 2))
+            if (ImGui.BeginTable("##workshopHeader", 4))
             {
                 ImGui.TableSetupColumn("##label", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("##btn", ImGuiTableColumnFlags.WidthFixed, 80);
+                ImGui.TableSetupColumn("##clearlist", ImGuiTableColumnFlags.WidthFixed, 80);
+                ImGui.TableSetupColumn("##queue", ImGuiTableColumnFlags.WidthFixed, 70);
+                ImGui.TableSetupColumn("##clearws", ImGuiTableColumnFlags.WidthFixed, 70);
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
@@ -63,6 +67,42 @@ namespace FCCH.UI
                         _expandedProjects.Clear();
                     }
                     ImGui.PopStyleColor();
+                }
+
+                ImGui.TableNextColumn();
+                if (projectCount > 0 && _ipc.IsAvailable)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                    if (ImGui.Button("Queue", new Vector2(-1, 0)))
+                    {
+                        int success = 0;
+                        foreach (var item in _helper.ShoppingList)
+                        {
+                            if (_ipc.AddQueueItem(item.Craft.WorkshopItemId, item.Quantity))
+                                success++;
+                        }
+                        if (success > 0)
+                            Common.ChatHelper.Info($"Queued {success} projects to Workshoppa.");
+                        else
+                            Common.ChatHelper.Warning("Failed to queue \u2014 is Workshoppa busy?");
+                    }
+                    ImGui.PopStyleColor();
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Send projects to Workshoppa queue");
+                }
+
+                ImGui.TableNextColumn();
+                if (_ipc.IsAvailable)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                    if (ImGui.Button("Clear WS", new Vector2(-1, 0)))
+                    {
+                        if (_ipc.ClearQueue())
+                            Common.ChatHelper.Info("Workshoppa queue cleared.");
+                        else
+                            Common.ChatHelper.Warning("Failed to clear \u2014 is Workshoppa busy?");
+                    }
+                    ImGui.PopStyleColor();
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Clear Workshoppa queue");
                 }
                 ImGui.EndTable();
             }

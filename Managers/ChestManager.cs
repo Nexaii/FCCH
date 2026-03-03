@@ -64,7 +64,7 @@ namespace FCCH.Managers
         public ChestManager(Configuration config)
         {
             _configuration = config;
-            _inventoryScanner = new InventoryScanner();
+            _inventoryScanner = new InventoryScanner(config);
         }
 
         public int ScanFCChest()
