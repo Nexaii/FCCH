@@ -32,7 +32,7 @@ namespace FCCH.UI
 
         private readonly TitleBarButton _kofiButton;
 
-        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService)
+        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, Common.WorkshoppaIPC workshoppaIpc)
             : base("FCCH Settings###SettingsWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
         {
             _helper = helper;
@@ -52,7 +52,7 @@ namespace FCCH.UI
             _generalTab = new GeneralTab(configuration, _fileDialogManager);
             _ignoreTab = new IgnoreTab(helper, configuration);
             _customTab = new CustomTab(helper, configuration);
-            _workshopTab = new WorkshopTab(helper, configuration, cache);
+            _workshopTab = new WorkshopTab(helper, configuration, cache, workshoppaIpc);
             _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr);
             _organizerTab = new OrganizerTab(orgService, configuration);
 

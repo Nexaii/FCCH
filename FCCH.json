@@ -2,7 +2,7 @@
     "Author": "Nexai",
     "Name": "FCCH",
     "InternalName": "FCCH",
-    "AssemblyVersion": "2.0.0.5",
+    "AssemblyVersion": "2.1.0.1",
     "Description": "Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.",
     "Punchline": "You ain't savin these slots, you puttin em to work.",
     "ApplicableVersion": "any",
@@ -19,5 +19,5 @@
     "SupportsProfiles": true,
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/fcch.png",
-    "Changelog": "- Fix: Enforce IncludeInDepositAll guard in CrystalManager.DepositDuplicates\n- Fix: Route gil deposits through Bank addon callbacks. FreeCompanyGil container is null when chest has 0 gil, which caused _moveItemWithQuantity to fail\n- Improvement: Reduced chat verbosity. Moved queued/processing messages to Verbose mode, condensed indexing output."
+    "Changelog": "- Fix: Prevented trade window gil maxing during Auto-Confirm\n- Fix: Updated ContainerInfoCallback signature for 7.45\n- Addition: Workshoppa IPC integration\n- Addition: Debug logging for hook resolution"
 }

@@ -14,10 +14,11 @@ namespace FCCH.Managers
     public unsafe class InventoryScanner : IDisposable
     {
         private readonly HashSet<InventoryType> _loadedInventories = new();
+        private readonly Configuration _configuration;
         
         private delegate void* ContainerInfoNetworkData(int a2, int* a3);
         
-        [Signature("48 89 74 24 ?? 57 48 81 EC ?? ?? ?? ?? 44 0F B7 42 ??",
+        [Signature("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 44 0F B7 42 02 48 8B FA 48 8B D9",
                    DetourName = nameof(ContainerInfoDetour), UseFlags = SignatureUseFlags.Hook)]
         private Hook<ContainerInfoNetworkData>? _containerInfoHook = null;
         
@@ -31,10 +32,21 @@ namespace FCCH.Managers
             InventoryType.FreeCompanyCrystals,
         };
 
-        public InventoryScanner()
+        public InventoryScanner(Configuration configuration)
         {
+            _configuration = configuration;
             Plugin.GameInteropProvider.InitializeFromAttributes(this);
-            _containerInfoHook?.Enable();
+
+            if (_containerInfoHook != null)
+            {
+                _containerInfoHook.Enable();
+                DebugLog("[InventoryScanner] ContainerInfoCallback hook resolved and enabled.");
+            }
+            else
+            {
+                Plugin.PluginLog.Warning("[InventoryScanner] ContainerInfoCallback signature mismatch — hook not resolved.");
+                DebugLog("[InventoryScanner] ContainerInfoCallback signature mismatch — hook not resolved.");
+            }
         }
 
         public void Dispose()
@@ -60,16 +72,23 @@ namespace FCCH.Managers
                     if (Enum.IsDefined(typeof(InventoryType), containerInfo.ContainerId))
                     {
                         var inventoryType = (InventoryType)containerInfo.ContainerId;
+                        DebugLog($"[InventoryScanner] ContainerInfo received: ContainerId={containerInfo.ContainerId} ({inventoryType}), NumItems={containerInfo.NumItems}, Seq={seq}");
                         if (IsFCPage(inventoryType))
                         {
                             _loadedInventories.Add(inventoryType);
+                            DebugLog($"[InventoryScanner] FC page {inventoryType} marked as loaded.");
                         }
+                    }
+                    else
+                    {
+                        DebugLog($"[InventoryScanner] ContainerInfo received with unknown ContainerId={containerInfo.ContainerId}, Seq={seq}");
                     }
                 }
             }
             catch (Exception e)
             {
                 Plugin.PluginLog.Error(e, "[InventoryScanner] ContainerInfo processing failed.");
+                DebugLog($"[InventoryScanner] ContainerInfo processing failed: {e.Message}");
             }
             
             return _containerInfoHook!.Original(seq, a3);
@@ -122,6 +141,22 @@ namespace FCCH.Managers
                 if (!IsInventoryLoaded(type)) return null;
             }
             return InventoryManager.Instance()->GetInventoryContainer(type);
+        }
+
+        private void DebugLog(string msg)
+        {
+            if (!_configuration.DebugMode) return;
+            Plugin.PluginLog.Info(msg);
+
+            try
+            {
+                var path = _configuration.DebugLogPath;
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    System.IO.File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}");
+                }
+            }
+            catch { }
         }
     }
 }

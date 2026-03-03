@@ -103,10 +103,14 @@ namespace FCCH.Managers
             
             if (IsProcessing || (DateTime.Now - MoveManager.LastActionTime).TotalSeconds < 2.0)
             {
-                var numeric = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.INPUT_NUMERIC_ADDON_NAME, 1);
-                if (numeric != null && numeric->IsVisible)
+                var fcChest = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+                if (fcChest != null && fcChest->IsVisible)
                 {
-                    Callback.Fire(numeric, true, (int)numeric->AtkValues[Constants.NUMERIC_INPUT_CALLBACK_IDX].UInt);
+                    var numeric = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.INPUT_NUMERIC_ADDON_NAME, 1);
+                    if (numeric != null && numeric->IsVisible)
+                    {
+                        Callback.Fire(numeric, true, (int)numeric->AtkValues[Constants.NUMERIC_INPUT_CALLBACK_IDX].UInt);
+                    }
                 }
             }
             

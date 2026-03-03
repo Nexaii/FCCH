@@ -40,6 +40,7 @@ namespace FCCH
         private OpLockManager OpLockManager { get; init; }
         private GilManager GilManager { get; init; }
         private OrgService OrgService { get; init; }
+        private Common.WorkshoppaIPC WorkshoppaIpc { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
 
@@ -50,6 +51,7 @@ namespace FCCH
 
             WorkshopCache = new WorkshopCache(Data, PluginLog);
             ChestHelper = new ChestHelper(Configuration);
+            WorkshoppaIpc = new Common.WorkshoppaIPC(PluginInterface);
             
             OpLockManager = new OpLockManager();
             GilManager = new GilManager(Configuration, ChestHelper.MoveManager);
@@ -60,13 +62,13 @@ namespace FCCH
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
 
-            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService);
+            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIpc);
             
             WindowSystem.AddWindow(SettingsWindow);
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
-                HelpMessage = "Opens settings.\n[Deposit] da=All | dd=Duplicates | dc=Crystals\n[Withdraw] wa=All | ws=Custom | wp=Workshop | wc=Crystals\n[Gil] gd/gw <amt> (k/m/all)\n[Info] info"
+                HelpMessage = "Opens settings.\n— Deposit: da (All) | dd (Dupes) | dc (Crystals)\n— Withdraw: wa (All) | ws (Custom) | wp (Workshop) | wc (Crystals)\n— Gil: gd (Deposit) | gw (Withdraw) — e.g. 5k, 1m, all\n— Info: info"
             });
 
             PluginInterface.UiBuilder.Draw += DrawUI;
