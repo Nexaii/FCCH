@@ -23,6 +23,12 @@ namespace FCCH.UI
         private string _selectedPresetName = "";
         private bool _showSavePresetModal = false;
 
+        private static readonly HashSet<string> _alwaysIncludeNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Ceruleum Tank",
+            "Magitek Repair Materials",
+        };
+
         public CustomTab(ChestHelper helper, Configuration configuration)
         {
             _helper = helper;
@@ -44,7 +50,7 @@ namespace FCCH.UI
                 ImGui.TableNextRow();
 
                 ImGui.TableNextColumn();
-                ImGui.TextDisabled($"Withdrawal List ({itemCount} items, {totalQty:N0} total)");
+                ImGui.TextDisabled($"Custom List ({itemCount} items, {totalQty:N0} total)");
 
                 ImGui.TableNextColumn();
                 if (itemCount > 0)
@@ -65,19 +71,20 @@ namespace FCCH.UI
             if (_configuration.WithdrawItems.Count == 0)
             {
                 ImGui.BeginChild("CustomItemsList", new Vector2(0, -footerHeight), true);
-                ImGui.TextDisabled("No items in withdrawal list. Use search below to add items.");
+                ImGui.TextDisabled("No items in custom list. Use search below to add items.");
                 ImGui.EndChild();
             }
             else
             {
                 if (ImGui.BeginChild("CustomItemsList", new Vector2(0, -footerHeight), true))
                 {
-                    if (ImGui.BeginTable("CustomItemsTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+                    if (ImGui.BeginTable("CustomItemsTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
                     {
                         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Want", ImGuiTableColumnFlags.WidthFixed, 70);
-                        ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, 55);
-                        ImGui.TableSetupColumn("##max", ImGuiTableColumnFlags.WidthFixed, 35);
+                        ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, 70);
+                        ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, 70);
+                        ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, 82);
+                        ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, 45);
                         ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, 25);
                         ImGui.TableHeadersRow();
 
@@ -119,13 +126,15 @@ namespace FCCH.UI
                 if (sheet != null && !string.IsNullOrEmpty(_searchFilter))
                 {
                     var filtered = sheet.Where(i =>
-                        i.Name.ToString().Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)
-                        && !i.IsUntradable
-                        && i.RowId != 1
-                        && !(i.RowId >= 2 && i.RowId <= 19)
-                        && i.ItemSearchCategory.RowId != 0
-                        && i.ItemUICategory.RowId != 61
-                    ).Take(20);
+                    {
+                        var name = i.Name.ToString();
+                        if (string.IsNullOrEmpty(name)) return false;
+                        if (!name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)) return false;
+                        if (_alwaysIncludeNames.Contains(name)) return true;
+                        return !i.IsUntradable
+                            && i.RowId != 1
+                            && !(i.RowId >= 2 && i.RowId <= 19);
+                    }).Take(20);
 
                     if (filtered.Any())
                     {
@@ -167,8 +176,9 @@ namespace FCCH.UI
         {
             ImGui.TableNextRow();
 
-            long have = _helper.GetItemCountInChest(item.ItemId);
-            bool insufficient = have < item.Quantity;
+            long chestHave = _helper.GetItemCountInChest(item.ItemId);
+            long inventoryHave = _helper.GetItemCountInPlayerInventory(item.ItemId);
+            bool insufficient = IsInsufficient(item, chestHave, inventoryHave);
 
             ImGui.TableNextColumn();
             ImGui.AlignTextToFramePadding();
@@ -182,12 +192,35 @@ namespace FCCH.UI
             }
 
             ImGui.TableNextColumn();
-            int qty = item.Quantity;
-
             int maxLimit = 249750;
             var sheetItem = Plugin.Data.GetExcelSheet<Item>()?.GetRow(item.ItemId);
             if (sheetItem != null && sheetItem.Value.StackSize > 999) maxLimit = 9999;
 
+            DrawQuantity(item, maxLimit);
+
+            ImGui.TableNextColumn();
+            DrawHave(item, chestHave, inventoryHave, insufficient);
+
+            ImGui.TableNextColumn();
+            DrawModeButton(item);
+
+            ImGui.TableNextColumn();
+            DrawMaxToggle(item);
+
+            ImGui.TableNextColumn();
+            DrawDeleteButton(index);
+        }
+
+        private void DrawQuantity(WithdrawItem item, int maxLimit)
+        {
+            if (item.AlwaysMax)
+            {
+                ImGui.AlignTextToFramePadding();
+                ImGui.TextDisabled("Max");
+                return;
+            }
+
+            int qty = item.Quantity;
             ImGui.SetNextItemWidth(-1);
             if (ImGui.InputInt("##qty", ref qty, 0))
             {
@@ -196,32 +229,61 @@ namespace FCCH.UI
                 item.Quantity = qty;
                 _configuration.Save();
             }
+        }
 
-            ImGui.TableNextColumn();
+        private void DrawHave(WithdrawItem item, long chestHave, long inventoryHave, bool insufficient)
+        {
+            var text = item.Mode switch
+            {
+                CustomItemMode.Deposit => inventoryHave.ToString(),
+                CustomItemMode.Both => $"{chestHave}/{inventoryHave}",
+                _ => chestHave.ToString()
+            };
+
             if (insufficient)
             {
-                ImGui.TextColored(ImGuiColors.DalamudRed, $"{have}");
+                ImGui.TextColored(ImGuiColors.DalamudRed, text);
             }
             else
             {
-                ImGui.TextColored(ImGuiColors.HealerGreen, $"{have}");
+                ImGui.TextColored(ImGuiColors.HealerGreen, text);
             }
 
-            ImGui.TableNextColumn();
+            if (ImGui.IsItemHovered() && item.Mode == CustomItemMode.Both)
+                ImGui.SetTooltip("Chest / Inventory");
+        }
+
+        private void DrawModeButton(WithdrawItem item)
+        {
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-            if (ImGui.Button("Max"))
+            if (ImGui.Button(GetModeLabel(item.Mode), new Vector2(-1, 0)))
             {
-                long count = _helper.GetItemCountInChest(item.ItemId);
-                if (_configuration.LeaveOneItemPerStack && count > 0)
-                    count--;
-                if (count > maxLimit) count = maxLimit;
-                item.Quantity = Math.Max(1, (int)count);
+                item.CycleMode();
                 _configuration.Save();
             }
             ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip($"Set to max available ({have})");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Click to cycle mode");
+        }
 
-            ImGui.TableNextColumn();
+        private void DrawMaxToggle(WithdrawItem item)
+        {
+            var buttonColor = item.AlwaysMax
+                ? ImGuiColors.HealerGreen
+                : ImGui.GetStyle().Colors[(int)ImGuiCol.Button];
+
+            ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+            if (ImGui.Button("Max", new Vector2(-1, 0)))
+            {
+                item.AlwaysMax = !item.AlwaysMax;
+                _configuration.Save();
+            }
+            ImGui.PopStyleColor(2);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Always use max available");
+        }
+
+        private void DrawDeleteButton(int index)
+        {
             ImGui.PushFont(UiBuilder.IconFont);
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
@@ -235,6 +297,28 @@ namespace FCCH.UI
                 _configuration.Save();
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove");
+        }
+
+        private bool IsInsufficient(WithdrawItem item, long chestHave, long inventoryHave)
+        {
+            if (item.AlwaysMax) return false;
+
+            return item.Mode switch
+            {
+                CustomItemMode.Deposit => inventoryHave < item.Quantity,
+                CustomItemMode.Both => chestHave < item.Quantity || inventoryHave < item.Quantity,
+                _ => chestHave < item.Quantity
+            };
+        }
+
+        private static string GetModeLabel(CustomItemMode mode)
+        {
+            return mode switch
+            {
+                CustomItemMode.Deposit => "Deposit",
+                CustomItemMode.Both => "Both",
+                _ => "Withdraw"
+            };
         }
 
         private void DrawPresets()
@@ -327,7 +411,7 @@ namespace FCCH.UI
             if (_configuration.SinglePresets.TryGetValue(name, out var items))
             {
                 _selectedPresetName = name;
-                _configuration.WithdrawItems = items.Select(x => new WithdrawItem { ItemId = x.ItemId, Quantity = x.Quantity }).ToList();
+                _configuration.WithdrawItems = items.Select(x => x.Clone()).ToList();
                 _configuration.Save();
             }
         }
@@ -347,7 +431,7 @@ namespace FCCH.UI
                 {
                     if (!string.IsNullOrWhiteSpace(_presetNameInput))
                     {
-                        var listCopy = _configuration.WithdrawItems.Select(x => new WithdrawItem { ItemId = x.ItemId, Quantity = x.Quantity }).ToList();
+                        var listCopy = _configuration.WithdrawItems.Select(x => x.Clone()).ToList();
                         _configuration.SinglePresets[_presetNameInput] = listCopy;
                         _configuration.Save();
                         _selectedPresetName = _presetNameInput;

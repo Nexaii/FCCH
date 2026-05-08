@@ -47,6 +47,12 @@ namespace FCCH.Managers
         public void Deposit(bool force = false)
         {
             if (!force && !_configuration.CrystalConfig.IncludeInDepositAll) return;
+            var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals);
+            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
+            {
+                ChatHelper.Info($"Skipping {(force ? "dc" : "da")} for crystals.");
+                return;
+            }
             InvalidateCache();
             foreach (var id in AllIds)
             {
@@ -74,6 +80,11 @@ namespace FCCH.Managers
         public void Withdraw(bool force = false)
         {
             if (!force && !_configuration.CrystalConfig.IncludeInWithdrawAll) return;
+            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FULL_ACCESS)
+            {
+                ChatHelper.Info($"Skipping {(force ? "wc" : "wa")} for crystals.");
+                return;
+            }
             InvalidateCache();
             foreach (var id in AllIds)
             {

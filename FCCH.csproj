@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Dalamud.NET.Sdk/14.0.1">
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Authors>Nexai</Authors>
-    <Version>2.1.0.1</Version>
+    <Version>2.2.0.0</Version>
+    <DalamudLibPath>$(MSBuildThisFileDirectory)..\..\Resources\Dalamud\bin\Release\</DalamudLibPath>
+    <AssemblySearchPaths>$(DalamudLibPath);{GAC};{TargetFrameworkDirectory};{RawFileName}</AssemblySearchPaths>
     <Description>Free Company Chest Helper. Automate deposits, withdrawals, and organization. Manage crystals, custom lists, and workshop projects.</Description>
     <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/Nexaii/FCCH</PackageProjectUrl>

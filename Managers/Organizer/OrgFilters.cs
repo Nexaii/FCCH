@@ -12,11 +12,11 @@ namespace FCCH.Managers.Organizer
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
             11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
             21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-            33, 34, 35, 36, 37, 38,
+            32, 33, 34, 35, 36, 37, 38,
             40, 41, 42, 43,
             84, 87, 88, 89,
             96, 97, 98,
-            105, 106, 107, 108, 109,
+            105, 106, 107, 108, 109, 110,
             111, 112
         };
 
@@ -24,29 +24,36 @@ namespace FCCH.Managers.Organizer
 
         private static readonly HashSet<uint> MaterialsCategoryIds = new()
         {
-            45, 47, 48, 49, 50, 51, 52, 53, 54, 58, 63
+            45, 47, 48, 49, 50, 51, 52, 53, 54, 60, 63, 83
         };
 
-        private static readonly HashSet<uint> MateriaCategoryIds = new() { 59, 60, 64 };
+        private static readonly HashSet<uint> MateriaCategoryIds = new() { 58 };
 
-        private static readonly HashSet<uint> RegistrableCategoryIds = new() { 81, 86, 90, 93, 103, 104 };
+        private static readonly HashSet<uint> RegistrableCategoryIds = new() { 81, 86, 90, 91, 92, 93, 101, 102, 103, 104 };
 
         private static readonly HashSet<uint> DyeCategoryIds = new() { 55 };
 
         private static readonly HashSet<uint> HousingCategoryIds = new()
         {
             56, 57,
-            65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
+            64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76,
             77, 78, 79, 80,
-            83,
-            91, 92, 94
+            94, 95
         };
 
         private static readonly HashSet<uint> GardeningCategoryIds = new() { 82 };
 
-        private static readonly HashSet<uint> MiscCategoryIds = new() { 32, 61, 62 };
+        private static readonly HashSet<uint> MiscCategoryIds = new() { 61 };
 
-        private static readonly HashSet<uint> BlockedCategoryIds = new() { 85, 99, 100 };
+        private static readonly HashSet<uint> BlockedCategoryIds = new() { 62, 85, 99, 100 };
+
+        private static readonly HashSet<string> _blockBypassNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Ceruleum Tank",
+            "Magitek Repair Materials",
+        };
+
+        private static readonly HashSet<uint> _blockBypassItemIds = new();
 
         private static readonly Dictionary<uint, uint> _itemCategoryCache = new();
         private static bool _initialized = false;
@@ -64,6 +71,10 @@ namespace FCCH.Managers.Organizer
                 foreach (var item in itemSheet)
                 {
                     _itemCategoryCache[item.RowId] = item.ItemUICategory.RowId;
+                    if (_blockBypassNames.Contains(item.Name.ToString()))
+                    {
+                        _blockBypassItemIds.Add(item.RowId);
+                    }
                 }
             }
             catch { }
@@ -88,7 +99,7 @@ namespace FCCH.Managers.Organizer
             {
                 var categoryId = GetItemUICategory(slot.ItemId);
 
-                if (IsBlocked(categoryId)) return false;
+                if (IsBlocked(categoryId) && !_blockBypassItemIds.Contains(slot.ItemId)) return false;
 
                 if (filters.Contains(OrgFilterCategory.AllItems)) return true;
                 if (filters.Count == 0) return true;

@@ -31,6 +31,9 @@ namespace FCCH.UI
         private readonly OrganizerTab _organizerTab;
 
         private readonly TitleBarButton _kofiButton;
+        private readonly TitleBarButton _settingsLockButton;
+        private readonly TitleBarButton _settingsSnapButton;
+        private bool _snapPending;
 
         public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, Common.WorkshoppaIPC workshoppaIpc)
             : base("FCCH Settings###SettingsWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
@@ -65,6 +68,41 @@ namespace FCCH.UI
                 Click = _ => OpenKoFiLink(),
                 AvailableClickthrough = true,
             };
+
+            _settingsLockButton = new TitleBarButton
+            {
+                Icon = _configuration.IsWindowLocked ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen,
+                ShowTooltip = () => ImGui.SetTooltip(_configuration.IsWindowLocked
+                    ? "Settings window is locked to the Company Chest\nClick to unlock and drag freely"
+                    : "Settings window is unlocked\nClick to lock current position"),
+                Priority = 0,
+                Click = _ => ToggleSettingsLock(),
+            };
+
+            _settingsSnapButton = new TitleBarButton
+            {
+                Icon = FontAwesomeIcon.Crosshairs,
+                ShowTooltip = () => ImGui.SetTooltip("Snap Settings window back to the Company Chest"),
+                Priority = 1,
+                Click = _ => SnapSettingsToChest(),
+            };
+        }
+
+        private void ToggleSettingsLock()
+        {
+            _configuration.IsWindowLocked = !_configuration.IsWindowLocked;
+            _configuration.Save();
+            _settingsLockButton.Icon = _configuration.IsWindowLocked ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
+        }
+
+        private void SnapSettingsToChest()
+        {
+            _configuration.IsWindowLocked = true;
+            _configuration.SettingsPosX = -1f;
+            _configuration.SettingsPosY = -1f;
+            _snapPending = true;
+            _configuration.Save();
+            _settingsLockButton.Icon = FontAwesomeIcon.Lock;
         }
 
         private void OpenKoFiLink()
@@ -89,6 +127,14 @@ namespace FCCH.UI
             if (!TitleBarButtons.Contains(_kofiButton))
             {
                 TitleBarButtons.Add(_kofiButton);
+            }
+            if (!TitleBarButtons.Contains(_settingsLockButton))
+            {
+                TitleBarButtons.Add(_settingsLockButton);
+            }
+            if (!TitleBarButtons.Contains(_settingsSnapButton))
+            {
+                TitleBarButtons.Add(_settingsSnapButton);
             }
 
             var fcChestAddon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
@@ -144,27 +190,76 @@ namespace FCCH.UI
         public override void Draw()
         {
             var addon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
-            
-            if (addon != null && addon->IsVisible)
-            {
-                var myWidth = ImGui.GetWindowSize().X;
-                float targetX;
-                float targetY = addon->Y + 4;
+            bool chestVisible = addon != null && addon->IsVisible;
 
-                if (_configuration.ListsOnRightSide)
+            if (_snapPending)
+            {
+                if (chestVisible)
                 {
-                    float rootWidth = addon->RootNode != null ? addon->RootNode->Width : 0;
-                    targetX = addon->X + (rootWidth * addon->Scale) + 10;
+                    var attached = ComputeChestAttachedPosition(addon, ImGui.GetWindowSize().X, _configuration.ListsOnRightSide);
+                    ImGui.SetWindowPos(attached, ImGuiCond.Always);
                 }
-                else
+                _configuration.SettingsPosX = -1f;
+                _configuration.SettingsPosY = -1f;
+                _snapPending = false;
+            }
+            else if (_configuration.IsWindowLocked)
+            {
+                if (_configuration.SettingsPosX >= 0 && _configuration.SettingsPosY >= 0)
                 {
-                    targetX = addon->X - myWidth - 10;
+                    var saved = ClampToViewport(new Vector2(_configuration.SettingsPosX, _configuration.SettingsPosY));
+                    ImGui.SetWindowPos(saved, ImGuiCond.Always);
                 }
-                
-                 ImGui.SetWindowPos(new Vector2(targetX, targetY), ImGuiCond.Always);
+                else if (chestVisible)
+                {
+                    var attached = ComputeChestAttachedPosition(addon, ImGui.GetWindowSize().X, _configuration.ListsOnRightSide);
+                    ImGui.SetWindowPos(attached, ImGuiCond.Always);
+                }
+            }
+            else
+            {
+                if (_configuration.SettingsPosX >= 0 && _configuration.SettingsPosY >= 0)
+                {
+                    var saved = ClampToViewport(new Vector2(_configuration.SettingsPosX, _configuration.SettingsPosY));
+                    ImGui.SetWindowPos(saved, ImGuiCond.Appearing);
+                }
+                PersistDriftIfUnlocked();
             }
 
             DrawContent();
+        }
+
+        private static unsafe Vector2 ComputeChestAttachedPosition(AtkUnitBase* addon, float myWidth, bool rightSide)
+        {
+            float scale = addon->Scale;
+            float rootWidth = addon->RootNode != null ? addon->RootNode->Width * scale : 0f;
+            float targetY = addon->Y + 4;
+            float targetX = rightSide
+                ? addon->X + rootWidth + 10
+                : addon->X - myWidth - 10;
+
+            return new Vector2(targetX, targetY);
+        }
+
+        private void PersistDriftIfUnlocked()
+        {
+            var pos = ImGui.GetWindowPos();
+            if (Math.Abs(pos.X - _configuration.SettingsPosX) > 1f
+                || Math.Abs(pos.Y - _configuration.SettingsPosY) > 1f)
+            {
+                _configuration.SettingsPosX = pos.X;
+                _configuration.SettingsPosY = pos.Y;
+                _configuration.Save();
+            }
+        }
+
+        private static Vector2 ClampToViewport(Vector2 pos)
+        {
+            var vp = ImGui.GetMainViewport();
+            const float minVisible = 80f;
+            float x = Math.Clamp(pos.X, 0f, Math.Max(0f, vp.Size.X - minVisible));
+            float y = Math.Clamp(pos.Y, 0f, Math.Max(0f, vp.Size.Y - minVisible));
+            return new Vector2(x, y);
         }
 
         private void DrawContent()
@@ -201,10 +296,14 @@ namespace FCCH.UI
                     ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("Workshop")) 
+                if (ImGui.BeginTabItem("Workshop"))
                 {
                     _workshopTab.Draw();
                     ImGui.EndTabItem();
+                }
+                else
+                {
+                    _workshopTab.OnTabDeactivated();
                 }
 
                 var switchIcon = _configuration.ListsOnRightSide ? FontAwesomeIcon.AngleLeft.ToIconString() : FontAwesomeIcon.AngleRight.ToIconString();

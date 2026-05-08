@@ -41,6 +41,7 @@ namespace FCCH
         private GilManager GilManager { get; init; }
         private OrgService OrgService { get; init; }
         private Common.WorkshoppaIPC WorkshoppaIpc { get; init; }
+        private Common.FCCHIpc FcchIpc { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
 
@@ -53,8 +54,9 @@ namespace FCCH
             ChestHelper = new ChestHelper(Configuration);
             WorkshoppaIpc = new Common.WorkshoppaIPC(PluginInterface);
             
-            OpLockManager = new OpLockManager();
-            GilManager = new GilManager(Configuration, ChestHelper.MoveManager);
+            OpLockManager = new OpLockManager(Configuration);
+            GilManager = new GilManager(Configuration, ChestHelper.ChestManager, ChestHelper.MoveManager);
+            FcchIpc = new Common.FCCHIpc(PluginInterface, ChestHelper, GilManager);
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
 
@@ -68,7 +70,7 @@ namespace FCCH
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
-                HelpMessage = "Opens settings.\n— Deposit: da (All) | dd (Dupes) | dc (Crystals)\n— Withdraw: wa (All) | ws (Custom) | wp (Workshop) | wc (Crystals)\n— Gil: gd (Deposit) | gw (Withdraw) — e.g. 5k, 1m, all\n— Info: info"
+                HelpMessage = "Opens settings.\n— Deposit: da (All) | da1..da5 (Tab N) | dd (Dupes) | dc (Crystals)\n— Withdraw: wa (All) | wa1..wa5 (Tab N) | ws (Custom) | wp (Workshop) | wc (Crystals)\n— Gil: gd (Deposit) | gw (Withdraw) — e.g. 5k, 1m, all\n— Info: info"
             });
 
             PluginInterface.UiBuilder.Draw += DrawUI;
@@ -83,6 +85,7 @@ namespace FCCH
 
         private unsafe void OnUpdate(IFramework framework)
         {
+            Common.DebugFileLogger.Tick();
             OverlayManager.Update();
             
             if (_wasSettingsOpen && !SettingsWindow.IsOpen)
@@ -124,23 +127,29 @@ namespace FCCH
                 case "da":
                     ChestHelper.ProcessCommand(() => ChestHelper.DepositAll());
                     break;
+                case "da1": case "da2": case "da3": case "da4": case "da5":
+                {
+                    int tab = int.Parse(subCommand.Substring(2));
+                    ChestHelper.ProcessCommand(() => ChestHelper.DepositToTab(tab));
+                    break;
+                }
+                case "wa1": case "wa2": case "wa3": case "wa4": case "wa5":
+                {
+                    int tab = int.Parse(subCommand.Substring(2));
+                    ChestHelper.ProcessCommand(() => ChestHelper.WithdrawFromTab(tab));
+                    break;
+                }
                 case "dd":
                     ChestHelper.ProcessCommand(() => ChestHelper.DepositDuplicates());
+                    break;
+                case "ds":
+                    ChestHelper.ProcessCommand(() => ChestHelper.DepositCustomItems());
                     break;
                 case "wa":
                     ChestHelper.ProcessCommand(() => ChestHelper.WithdrawAll());
                     break;
                 case "ws":
-                    ChestHelper.ProcessCommand(() =>
-                    {
-                        if (Configuration.WithdrawItems.Count > 0)
-                        {
-                            var dict = new System.Collections.Generic.Dictionary<uint, int>();
-                            foreach(var item in Configuration.WithdrawItems) dict[item.ItemId] = item.Quantity;
-                            ChestHelper.WithdrawMaterials(dict);
-                        }
-                        else ChatHelper.Info("Custom list is empty.");
-                    });
+                    ChestHelper.ProcessCommand(() => ChestHelper.WithdrawCustomItems());
                     break;
                 case "dc":
                     ChestHelper.ProcessCommand(() => ChestHelper.CrystalMgr.Deposit(true));
@@ -149,26 +158,7 @@ namespace FCCH
                     ChestHelper.ProcessCommand(() => ChestHelper.CrystalMgr.Withdraw(true));
                     break;
                 case "wp":
-                    ChestHelper.ProcessCommand(() =>
-                    {
-                        if (ChestHelper.ShoppingList.Count > 0)
-                        {
-                            var list = new System.Collections.Generic.Dictionary<uint, int>();
-                            foreach (var shopItem in ChestHelper.ShoppingList)
-                            {
-                                var mats = shopItem.Craft.Phases
-                                    .SelectMany(p => p.Items)
-                                    .Select(x => new { Item = x, Required = x.TotalQuantity * shopItem.Quantity });
-                                foreach (var mat in mats)
-                                {
-                                    if (!list.ContainsKey(mat.Item.ItemId)) list[mat.Item.ItemId] = 0;
-                                    list[mat.Item.ItemId] += mat.Required;
-                                }
-                            }
-                            ChestHelper.WithdrawMaterials(list);
-                        }
-                        else ChatHelper.Info("Workshop list is empty.");
-                    });
+                    ChestHelper.ProcessCommand(() => ChestHelper.WithdrawWorkshopItems());
                     break;
 
                 case "info":
@@ -188,18 +178,7 @@ namespace FCCH
                         {
                             var access = ChestHelper.GetChestAccess(tab);
                             string tabName = tab.ToString().Replace("FreeCompanyPage", "");
-                            
-                            string accessStr = ((byte)access) switch
-                            {
-                                0 => "Full Access",
-                                1 => "Deposit/View",
-                                2 => "Deposit Only",
-                                3 => "View Only",
-                                4 => "No Access",
-                                _ => $"Unknown ({access})"
-                            };
-
-                            sb.Append($"{tabName}: {accessStr} | ");
+                            sb.Append($"{tabName}: {ChestManager.NameAccess(access)} | ");
                         }
                         
                         if (sb.Length > 3) sb.Length -= 3;
@@ -217,13 +196,26 @@ namespace FCCH
                 case "gildebug":
                     GilManager.EnableDebugMode();
                     break;
+                case "fcperms":
+                    ChestHelper.ProcessCommand(() =>
+                    {
+                        byte? overrideRank = null;
+                        if (parts.Length > 1 && byte.TryParse(parts[1], out var r)) overrideRank = r;
+                        ChestHelper.DumpRawPermissions(overrideRank);
+                        ChatHelper.Info("FC permission dump written to log (/xllog).");
+                    });
+                    break;
+                case "accessprobe":
+                case "aprobe":
+                    ChatHelper.Info(ChestHelper.DumpAccessProbe());
+                    break;
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();
                     ChatHelper.Info($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
                 default:
-                    ChatHelper.Info("Unknown command. Available: da, dd, wa, ws, wp, gd, gw, gildebug, info, debug");
+                    ChatHelper.Info("Unknown command. Available: da, da1..da5, dd, ds, dc, wa, wa1..wa5, ws, wp, wc, gd, gw, info");
                     break;
             }
         }
@@ -245,6 +237,7 @@ namespace FCCH
 
         public void Dispose()
         {
+            FcchIpc?.Dispose();
             GilManager?.Dispose();
             OpLockManager?.Dispose();
             OrgService?.Dispose();
@@ -259,6 +252,7 @@ namespace FCCH
             OverlayManager?.Dispose();
             SettingsWindow?.Dispose();
             ChestHelper?.Dispose();
+            Common.DebugFileLogger.DrainAndShutdown();
         }
     }
 }

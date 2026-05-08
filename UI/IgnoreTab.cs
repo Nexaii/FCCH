@@ -26,6 +26,12 @@ namespace FCCH.UI
         private string _selectedPresetName = "";
         private bool _showSavePresetModal = false;
 
+        private static readonly HashSet<string> _alwaysIncludeNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Ceruleum Tank",
+            "Magitek Repair Materials",
+        };
+
         public IgnoreTab(ChestHelper helper, Configuration configuration)
         {
             _helper = helper;
@@ -87,23 +93,23 @@ namespace FCCH.UI
                         
                         ImGui.TableNextColumn();
                         ImGui.PushFont(UiBuilder.IconFont);
-                        var depIcon = FontAwesomeIcon.ArrowCircleDown.ToIconString();
+                        var depIcon = FontAwesomeIcon.ArrowDown.ToIconString();
                         var iconWidth = ImGui.CalcTextSize(depIcon).X;
                         var colWidth = ImGui.GetColumnWidth();
                         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colWidth - iconWidth) * 0.5f);
                         ImGui.TextColored(new Vector4(0f, 1f, 1f, 1f), depIcon);
                         ImGui.PopFont();
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip during Deposit All");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Deposit");
 
                         ImGui.TableNextColumn();
                         ImGui.PushFont(UiBuilder.IconFont);
-                        var witIcon = FontAwesomeIcon.ArrowCircleUp.ToIconString();
+                        var witIcon = FontAwesomeIcon.ArrowUp.ToIconString();
                         iconWidth = ImGui.CalcTextSize(witIcon).X;
                         colWidth = ImGui.GetColumnWidth();
                         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colWidth - iconWidth) * 0.5f);
                         ImGui.TextColored(new Vector4(1f, 0.64f, 0f, 1f), witIcon);
                         ImGui.PopFont();
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip during Withdraw");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Withdraw");
 
                         ImGui.TableNextColumn();
                         var delIcon = FontAwesomeIcon.Trash.ToIconString();
@@ -149,7 +155,7 @@ namespace FCCH.UI
                                 gItem.Item.IgnoreEntrust = entrust;
                                 _helper.Configuration.Save();
                             }
-                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip during Deposit All");
+                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Deposit");
 
                             ImGui.TableNextColumn();
                             bool withdraw = gItem.Item.IgnoreWithdraw;
@@ -160,7 +166,7 @@ namespace FCCH.UI
                                 gItem.Item.IgnoreWithdraw = withdraw;
                                 _helper.Configuration.Save();
                             }
-                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip during Withdraw");
+                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Withdraw");
 
                             ImGui.TableNextColumn();
                             ImGui.PushFont(UiBuilder.IconFont);
@@ -238,13 +244,15 @@ namespace FCCH.UI
             if (sheet != null && !string.IsNullOrEmpty(_ignoreSearchFilter))
             {
                 _filteredItemsCache = sheet.Where(i =>
-                   i.Name.ToString().Contains(_ignoreSearchFilter, StringComparison.OrdinalIgnoreCase)
-                   && !i.IsUntradable
-                   && i.RowId != 1
-                   && !(i.RowId >= 2 && i.RowId <= 19)
-                   && i.ItemSearchCategory.RowId != 0
-                   && i.ItemUICategory.RowId != 61
-                ).Take(20).ToArray();
+                {
+                    var name = i.Name.ToString();
+                    if (string.IsNullOrEmpty(name)) return false;
+                    if (!name.Contains(_ignoreSearchFilter, StringComparison.OrdinalIgnoreCase)) return false;
+                    if (_alwaysIncludeNames.Contains(name)) return true;
+                    return !i.IsUntradable
+                        && i.RowId != 1
+                        && !(i.RowId >= 2 && i.RowId <= 19);
+                }).Take(20).ToArray();
             }
             else
             {

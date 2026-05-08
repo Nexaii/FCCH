@@ -60,8 +60,13 @@ namespace FCCH.Managers.Organizer
             List<ChestManager.ScannedSlot> destItems;
             if (request.Mode == OrgOperationMode.Sort)
             {
-                destItems = new List<ChestManager.ScannedSlot>();
-                result.DestFreeSlots = sourceIsPlayer ? Constants.PLAYER_INVENTORY_PAGE_SIZE * 4 : Constants.FC_CHEST_PAGE_SIZE;
+                var allPageItems = GetItems(request.SourceTab);
+                var sortedSlotKeys = new HashSet<(InventoryType, uint)>(
+                    sortedItems.Select(s => (s.Page, s.Slot)));
+                destItems = allPageItems
+                    .Where(x => !sortedSlotKeys.Contains((x.Page, x.Slot)))
+                    .ToList();
+                result.DestFreeSlots = (sourceIsPlayer ? Constants.PLAYER_INVENTORY_PAGE_SIZE * 4 : Constants.FC_CHEST_PAGE_SIZE) - destItems.Count;
                 result.NetSlotsNeeded = sortedItems.Count;
             }
             else if (destIsPlayer)
@@ -133,7 +138,7 @@ namespace FCCH.Managers.Organizer
                 else if (request.Mode == OrgOperationMode.Sort)
                 {
                     result.WithdrawMoves = BuildWithdrawMoves(sortedItems);
-                    result.DepositMoves = BuildDepositMoves(sortedItems, request.SourceTab, new List<ChestManager.ScannedSlot>());
+                    result.DepositMoves = BuildDepositMoves(sortedItems, request.SourceTab, destItems);
                 }
                 else
                 {

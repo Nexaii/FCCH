@@ -1,13 +1,10 @@
 using System;
 using System.Collections.Generic;
-using Dalamud.Game.ClientState;
 using Dalamud.Hooking;
-using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
-using FCCH.GameData;
 
 namespace FCCH.Managers
 {
@@ -15,19 +12,22 @@ namespace FCCH.Managers
     {
         private readonly HashSet<InventoryType> _loadedInventories = new();
         private readonly Configuration _configuration;
-        
-        private delegate void* ContainerInfoNetworkData(int a2, int* a3);
-        
-        [Signature("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 44 0F B7 42 02 48 8B FA 48 8B D9",
-                   DetourName = nameof(ContainerInfoDetour), UseFlags = SignatureUseFlags.Hook)]
-        private Hook<ContainerInfoNetworkData>? _containerInfoHook = null;
-        
-        private static readonly InventoryType[] FC_PAGES = {
+
+        private delegate void FcBitsetSetterDelegate(nint state, uint byteIndex, byte newByte);
+
+        [Signature("83 FA 26 0F 83 ?? ?? ?? ?? 55 57 48 83 EC 28 8B EA 41 0F B6 F8",
+                   DetourName = nameof(FcBitsetSetterDetour), UseFlags = SignatureUseFlags.Hook)]
+        private Hook<FcBitsetSetterDelegate>? _fcBitsetHook = null;
+
+        private static readonly InventoryType[] FC_ITEM_PAGES = {
             InventoryType.FreeCompanyPage1,
             InventoryType.FreeCompanyPage2,
             InventoryType.FreeCompanyPage3,
             InventoryType.FreeCompanyPage4,
             InventoryType.FreeCompanyPage5,
+        };
+
+        private static readonly InventoryType[] FC_NON_ITEM = {
             InventoryType.FreeCompanyGil,
             InventoryType.FreeCompanyCrystals,
         };
@@ -37,109 +37,129 @@ namespace FCCH.Managers
             _configuration = configuration;
             Plugin.GameInteropProvider.InitializeFromAttributes(this);
 
-            if (_containerInfoHook != null)
+            if (_fcBitsetHook != null)
             {
-                _containerInfoHook.Enable();
-                DebugLog("[InventoryScanner] ContainerInfoCallback hook resolved and enabled.");
+                _fcBitsetHook.Enable();
+                DebugLog("[InventoryScanner] FC bitset setter (140BDF390) hook resolved and enabled.");
             }
             else
             {
-                Plugin.PluginLog.Warning("[InventoryScanner] ContainerInfoCallback signature mismatch — hook not resolved.");
-                DebugLog("[InventoryScanner] ContainerInfoCallback signature mismatch — hook not resolved.");
+                Plugin.PluginLog.Warning("[InventoryScanner] FC bitset setter signature mismatch — hook not resolved.");
+                DebugLog("[InventoryScanner] FC bitset setter signature mismatch — hook not resolved.");
             }
         }
 
         public void Dispose()
         {
-            if (_containerInfoHook != null)
+            if (_fcBitsetHook != null)
             {
-                if (_containerInfoHook.IsEnabled)
-                    _containerInfoHook.Disable();
-                _containerInfoHook.Dispose();
+                if (_fcBitsetHook.IsEnabled)
+                    _fcBitsetHook.Disable();
+                _fcBitsetHook.Dispose();
             }
             _loadedInventories.Clear();
         }
-        
-        private void* ContainerInfoDetour(int seq, int* a3)
+
+        private void FcBitsetSetterDetour(nint state, uint byteIndex, byte newByte)
         {
+            byte oldByte = 0;
+            bool inRange = byteIndex < 0x26;
+
             try
             {
-                if (a3 != null)
+                if (inRange && state != 0)
                 {
-                    var ptr = (IntPtr)a3 + 16;
-                    var containerInfo = NetworkDecoder.DecodeContainerInfo(ptr);
-                    
-                    if (Enum.IsDefined(typeof(InventoryType), containerInfo.ContainerId))
+                    oldByte = *(byte*)(state + 0x4F1 + (nint)byteIndex);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.PluginLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
+            }
+
+            _fcBitsetHook!.Original(state, byteIndex, newByte);
+
+            if (!inRange) return;
+
+            try
+            {
+                byte setBits = (byte)(newByte & (oldByte ^ newByte));
+                byte clearedBits = (byte)(oldByte & (oldByte ^ newByte));
+
+                for (int bit = 0; bit < 8; bit++)
+                {
+                    int containerId = 20000 + (int)byteIndex * 8 + bit;
+                    if (containerId > 20004) break;
+
+                    if ((setBits & (1 << bit)) != 0)
                     {
-                        var inventoryType = (InventoryType)containerInfo.ContainerId;
-                        DebugLog($"[InventoryScanner] ContainerInfo received: ContainerId={containerInfo.ContainerId} ({inventoryType}), NumItems={containerInfo.NumItems}, Seq={seq}");
-                        if (IsFCPage(inventoryType))
-                        {
-                            _loadedInventories.Add(inventoryType);
-                            DebugLog($"[InventoryScanner] FC page {inventoryType} marked as loaded.");
-                        }
+                        var t = (InventoryType)containerId;
+                        _loadedInventories.Add(t);
+                        DebugLog($"[InventoryScanner] FC page loaded: byteIndex={byteIndex} bit={bit} id={containerId} ({t}) old=0x{oldByte:X2} new=0x{newByte:X2}");
                     }
-                    else
+                    else if ((clearedBits & (1 << bit)) != 0)
                     {
-                        DebugLog($"[InventoryScanner] ContainerInfo received with unknown ContainerId={containerInfo.ContainerId}, Seq={seq}");
+                        var t = (InventoryType)containerId;
+                        _loadedInventories.Remove(t);
+                        DebugLog($"[InventoryScanner] FC page unloaded: byteIndex={byteIndex} bit={bit} id={containerId} ({t}) old=0x{oldByte:X2} new=0x{newByte:X2}");
                     }
                 }
             }
             catch (Exception e)
             {
-                Plugin.PluginLog.Error(e, "[InventoryScanner] ContainerInfo processing failed.");
-                DebugLog($"[InventoryScanner] ContainerInfo processing failed: {e.Message}");
+                Plugin.PluginLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
             }
-            
-            return _containerInfoHook!.Original(seq, a3);
+        }
+
+        public void ResetSession()
+        {
+            _loadedInventories.Clear();
+            DebugLog("[InventoryScanner] Session reset; cleared loaded inventories.");
+        }
+
+        public void MarkObserved(InventoryType type)
+        {
+            if (IsFCItemPage(type))
+            {
+                _loadedInventories.Add(type);
+                DebugLog($"[InventoryScanner] Marked observed: {type}");
+            }
         }
 
         public void Update()
         {
-            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
-            
+            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+
             if (addon == null || !addon->IsVisible)
             {
-                foreach (var page in FC_PAGES)
+                if (_loadedInventories.Count > 0)
                 {
-                    _loadedInventories.Remove(page);
+                    _loadedInventories.Clear();
+                    DebugLog("[InventoryScanner] Chest closed; cleared loaded inventories.");
                 }
-                return;
-            }
-
-            foreach (var page in FC_PAGES)
-            {
-                var container = InventoryManager.Instance()->GetInventoryContainer(page);
-                if (container != null && (container->IsLoaded || container->Size > 0))
-                {
-                    _loadedInventories.Add(page);
-                }
-
             }
         }
-        
+
         public bool IsInventoryLoaded(InventoryType type)
         {
-            if (IsFCPage(type))
+            if (IsFCItemPage(type))
             {
-                return _loadedInventories.Contains(type);
+                if (_loadedInventories.Contains(type)) return true;
+                var c = InventoryManager.Instance()->GetInventoryContainer(type);
+                return c != null && c->IsLoaded;
             }
-            
+
             var container = InventoryManager.Instance()->GetInventoryContainer(type);
-            return container != null && container->IsLoaded;
+            if (container == null) return false;
+            return container->IsLoaded;
         }
 
-        private bool IsFCPage(InventoryType type)
-        {
-            return Array.IndexOf(FC_PAGES, type) >= 0;
-        }
-        
+        private static bool IsFCItemPage(InventoryType type) => Array.IndexOf(FC_ITEM_PAGES, type) >= 0;
+        private static bool IsFCNonItem(InventoryType type) => Array.IndexOf(FC_NON_ITEM, type) >= 0;
+
         public InventoryContainer* GetContainer(InventoryType type)
         {
-            if (IsFCPage(type))
-            {
-                if (!IsInventoryLoaded(type)) return null;
-            }
+            if (IsFCItemPage(type) && !IsInventoryLoaded(type)) return null;
             return InventoryManager.Instance()->GetInventoryContainer(type);
         }
 
@@ -147,16 +167,7 @@ namespace FCCH.Managers
         {
             if (!_configuration.DebugMode) return;
             Plugin.PluginLog.Info(msg);
-
-            try
-            {
-                var path = _configuration.DebugLogPath;
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    System.IO.File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}");
-                }
-            }
-            catch { }
+            Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
         }
     }
 }

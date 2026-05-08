@@ -87,6 +87,47 @@ namespace FCCH.UI
                 ImGui.Spacing();
 
                 ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+                ImGui.CollapsingHeader("Toolbar", ImGuiTreeNodeFlags.Leaf);
+
+                DrawSettingRow("Lock Toolbar Position", () =>
+                {
+                    bool locked = _configuration.ToolbarLocked;
+                    if (ImGui.Checkbox("##toolbarLocked", ref locked))
+                    {
+                        _configuration.ToolbarLocked = locked;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.TextDisabled("(?)");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("When locked, the toolbar stays at its current position. When unlocked, you can drag it freely.");
+                });
+
+                DrawSettingRow("Snap to Chest", () =>
+                {
+                    if (ImGui.Button("Snap##toolbarSnap", new Vector2(120, 0)))
+                    {
+                        _configuration.ToolbarPosX = -1f;
+                        _configuration.ToolbarPosY = -1f;
+                        _configuration.Save();
+                    }
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Reset toolbar position back to its attached spot above the Company Chest.");
+                });
+
+                DrawSettingRow("Snap to Grid", () =>
+                {
+                    bool snapGrid = _configuration.ToolbarSnapToGrid;
+                    if (ImGui.Checkbox("##toolbarSnapGrid", ref snapGrid))
+                    {
+                        _configuration.ToolbarSnapToGrid = snapGrid;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.TextDisabled("(?)");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("While unlocked, snap toolbar position to a 10px grid when dragging.");
+                });
+
+
+                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
                 ImGui.CollapsingHeader("Behavior Rules", ImGuiTreeNodeFlags.Leaf);
 
                 DrawSettingRow("Lower Quality on Deposit", () =>
@@ -152,53 +193,67 @@ namespace FCCH.UI
                 });
                 ImGui.Spacing();
 
-                ImGui.SetNextItemOpen(true, ImGuiCond.Always);
-                ImGui.CollapsingHeader("Debug", ImGuiTreeNodeFlags.Leaf);
-
-                DrawSettingRow("Enable Debug Mode", () =>
+                if (ImGui.CollapsingHeader("Diagnostics"))
                 {
-                    bool debug = _configuration.DebugMode;
-                    if (ImGui.Checkbox("##debugMode", ref debug))
+                    DrawSettingRow("Enable Debug Mode", () =>
                     {
-                        _configuration.DebugMode = debug;
-                        _configuration.Save();
-                    }
-                });
-
-                DrawSettingRow("Custom Debug Path", () =>
-                {
-                    string logPath = _configuration.DebugLogPath;
-                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 35);
-                    if (ImGui.InputTextWithHint("##logPath", "Default: FCCH_Debug.log", ref logPath, 256))
-                    {
-                        _configuration.DebugLogPath = logPath;
-                        _configuration.Save();
-                    }
-                    ImGui.SameLine();
-                    ImGui.PushFont(UiBuilder.IconFont);
-                    if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##logBrowse"))
-                    {
-                        _fileDialogManager.SaveFileDialog("Select Log File", ".log", "FCCH_Debug.log", ".log", (success, selectedPath) =>
+                        bool debug = _configuration.DebugMode;
+                        if (ImGui.Checkbox("##debugMode", ref debug))
                         {
-                            if (success)
-                            {
-                                _configuration.DebugLogPath = selectedPath;
-                                _configuration.Save();
-                            }
-                        });
-                    }
-                    ImGui.PopFont();
-                });
+                            _configuration.DebugMode = debug;
+                            _configuration.Save();
+                        }
+                    });
 
-                DrawSettingRow("Verbose Logging", () =>
-                {
-                    bool verbose = _configuration.VerboseMode;
-                    if (ImGui.Checkbox("##verbose", ref verbose))
+                    DrawSettingRow("Custom Debug Path", () =>
                     {
-                        _configuration.VerboseMode = verbose;
-                        _configuration.Save();
+                        string logPath = _configuration.DebugLogPath;
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 35);
+                        if (ImGui.InputTextWithHint("##logPath", "Default: FCCH_Debug.log", ref logPath, 256))
+                        {
+                            _configuration.DebugLogPath = logPath;
+                            _configuration.Save();
+                        }
+                        ImGui.SameLine();
+                        ImGui.PushFont(UiBuilder.IconFont);
+                        if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##logBrowse"))
+                        {
+                            _fileDialogManager.SaveFileDialog("Select Log File", ".log", "FCCH_Debug.log", ".log", (success, selectedPath) =>
+                            {
+                                if (success)
+                                {
+                                    _configuration.DebugLogPath = selectedPath;
+                                    _configuration.Save();
+                                }
+                            });
+                        }
+                        ImGui.PopFont();
+                    });
+
+                    DrawSettingRow("Verbose Logging", () =>
+                    {
+                        bool verbose = _configuration.VerboseMode;
+                        if (ImGui.Checkbox("##verbose", ref verbose))
+                        {
+                            _configuration.VerboseMode = verbose;
+                            _configuration.Save();
+                        }
+                    });
+
+                    ImGui.Spacing();
+                    ImGui.TextDisabled("Internal diagnostic commands");
+                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
+                    float diagnosticBoxHeight = ImGui.GetTextLineHeightWithSpacing() * 4 + ImGui.GetStyle().WindowPadding.Y * 2;
+                    if (ImGui.BeginChild("InternalDiagnosticsBox", new Vector2(ImGui.GetContentRegionAvail().X, diagnosticBoxHeight), true))
+                    {
+                        ImGui.TextColored(ImGuiColors.DalamudOrange, "debug - toggle debug logging");
+                        ImGui.TextColored(ImGuiColors.DalamudOrange, "gildebug - trace gil callbacks");
+                        ImGui.TextColored(ImGuiColors.DalamudOrange, "accessprobe - dump live chest addon permission state");
+                        ImGui.TextColored(ImGuiColors.DalamudOrange, "fcperms [row] - dump raw FC rank permission bytes");
                     }
-                });
+                    ImGui.EndChild();
+                    ImGui.PopStyleColor();
+                }
                 ImGui.Spacing();
 
                 ImGui.Spacing();
@@ -217,6 +272,10 @@ namespace FCCH.UI
                     _configuration.DisableAskWithdrawAll = false;
                     _configuration.LowerQualityOnDeposit = false;
                     _configuration.LeaveOneItemPerStack = false;
+                    _configuration.ToolbarLocked = true;
+                    _configuration.ToolbarPosX = -1f;
+                    _configuration.ToolbarPosY = -1f;
+                    _configuration.ToolbarSnapToGrid = false;
                     _configuration.MoveDelayInMs = 700;
                     _configuration.WithdrawDelayInMs = 700;
                     _configuration.DebugMode = false;

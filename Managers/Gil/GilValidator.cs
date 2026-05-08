@@ -113,10 +113,10 @@ namespace FCCH.Managers.Gil
             return item != null ? (uint)item->Quantity : 0u;
         }
 
-        public static string GetPermissionString()
+        public static string GetPermissionString(ChestManager chestManager)
         {
             if (!IsChestOpen()) return "Chest Closed";
-            return CanAccessGilTab() ? "Available" : "Unavailable";
+            return ChestManager.NameAccess(chestManager.GetChestAccess(InventoryType.FreeCompanyGil));
         }
     }
 }

@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
 using FCCH.Models;
+using static FCCH.Common.ItemHelper;
 
 namespace FCCH.Managers.Organizer
 {
@@ -32,8 +33,10 @@ namespace FCCH.Managers.Organizer
         private int _depositIndex;
         private DateTime _lastMoveTime;
         private DateTime _scanWaitStart;
+        private DateTime _sortWaitStart;
         private const int MOVE_DELAY_MS = 150;
         private const int SCAN_WAIT_MS = 1500;
+        private const int SORT_WAIT_MS = 750;
 
         private InventoryType _lastSrcInv;
         private uint _lastSrcSlot;
@@ -167,6 +170,7 @@ namespace FCCH.Managers.Organizer
                 StatusMessage = "Withdraw complete. Waiting for player to sort inventory...";
                 DebugLog($"Withdraw phase complete. {_withdrawIndex} moves processed.");
                 _state = ExecutorState.WaitingForSort;
+                _sortWaitStart = DateTime.Now;
                 return;
             }
 
@@ -181,6 +185,8 @@ namespace FCCH.Managers.Organizer
 
         private void ProcessSort()
         {
+            if ((DateTime.Now - _sortWaitStart).TotalMilliseconds < SORT_WAIT_MS) return;
+
             DebugLog("Transitioning to Deposit phase.");
             _state = ExecutorState.Depositing;
             StatusMessage = "Beginning deposit phase...";
@@ -220,7 +226,7 @@ namespace FCCH.Managers.Organizer
                 var container = _chestManager.GetContainer(_lastSrcInv);
                 if (container != null)
                 {
-                    var item = container->GetInventorySlot((int)_lastSrcSlot);
+                    var item = ResolveItem(container->GetInventorySlot((int)_lastSrcSlot));
                     if (item != null) _lastSrcOriginalQty = (uint)item->Quantity;
                 }
 
@@ -268,7 +274,7 @@ namespace FCCH.Managers.Organizer
 
                 for (uint i = 0; i < container->Size; i++)
                 {
-                    var item = container->GetInventorySlot((int)i);
+                    var item = ResolveItem(container->GetInventorySlot((int)i));
                     if (item != null && item->ItemId == itemId && item->Quantity == requiredAmount)
                     {
                         if (!IsGhost(type, i, (uint)item->Quantity)) return (type, i);
@@ -283,7 +289,7 @@ namespace FCCH.Managers.Organizer
 
                 for (uint i = 0; i < container->Size; i++)
                 {
-                    var item = container->GetInventorySlot((int)i);
+                    var item = ResolveItem(container->GetInventorySlot((int)i));
                     if (item != null && item->ItemId == itemId && item->Quantity > requiredAmount)
                     {
                         if (!IsGhost(type, i, (uint)item->Quantity)) return (type, i);
@@ -298,7 +304,7 @@ namespace FCCH.Managers.Organizer
 
                 for (uint i = 0; i < container->Size; i++)
                 {
-                    var item = container->GetInventorySlot((int)i);
+                    var item = ResolveItem(container->GetInventorySlot((int)i));
                     if (item != null && item->ItemId == itemId && item->Quantity > 0)
                     {
                        if (!IsGhost(type, i, (uint)item->Quantity)) return (type, i);

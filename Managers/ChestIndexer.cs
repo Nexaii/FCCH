@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
@@ -34,7 +35,18 @@ namespace FCCH.Managers
         public void Start(bool autoDump)
         {
             _autoDumpAfterIndexing = autoDump;
-            _queue = new Queue<InventoryType>(_chestManager.GetAvailableTabs());
+            var tabs = _chestManager.GetAvailableTabs();
+            var restricted = tabs
+                .Where(x => _chestManager.GetChestAccess(x) == Constants.FCPermissions.NO_ACCESS)
+                .ToList();
+
+            foreach (var tab in restricted)
+                _chestManager.ClearPage(tab);
+
+            if (restricted.Count > 0)
+                ChatHelper.Info($"Skipping indexing restricted sections: {FormatSections(restricted)}");
+
+            _queue = new Queue<InventoryType>(tabs.Except(restricted));
 
             if (_queue.Count > 0)
             {
@@ -44,10 +56,7 @@ namespace FCCH.Managers
             }
         }
 
-        public void Stop()
-        {
-            _phase = IndexingPhase.Idle;
-        }
+        public void Stop() => _phase = IndexingPhase.Idle;
 
         public void SwitchToTab(InventoryType type)
         {
@@ -77,6 +86,7 @@ namespace FCCH.Managers
                 var currentPage = _chestManager.GetCurrentFCPage(addon);
                 if (currentPage == _targetPage || (isPassive && _chestManager.IsInventoryLoaded(_targetPage)))
                 {
+                    if (_configuration.DebugMode) DumpContainerDiag(_targetPage);
                     _chestManager.UpdateChestState(_targetPage);
 
                     if (_queue.Count > 0)
@@ -97,11 +107,7 @@ namespace FCCH.Managers
                         }
 
                         OnIndexingComplete?.Invoke();
-
-                        if (_autoDumpAfterIndexing)
-                        {
-                            OnAutoDumpRequested?.Invoke();
-                        }
+                        if (_autoDumpAfterIndexing) OnAutoDumpRequested?.Invoke();
                     }
                 }
                 else if ((DateTime.Now - _lastActionTime).TotalSeconds > _configuration.IndexingTimeoutSeconds)
@@ -110,6 +116,40 @@ namespace FCCH.Managers
                     _phase = IndexingPhase.Idle;
                 }
             }
+        }
+
+        private static string FormatSections(IEnumerable<InventoryType> sections)
+            => string.Join(", ", sections.Select(FormatSection));
+
+        private static string FormatSection(InventoryType section)
+            => section switch
+            {
+                >= InventoryType.FreeCompanyPage1 and <= InventoryType.FreeCompanyPage5 => $"tab {((int)section - (int)InventoryType.FreeCompanyPage1 + 1)}",
+                InventoryType.FreeCompanyCrystals => "crystals",
+                InventoryType.FreeCompanyGil => "gil",
+                _ => section.ToString(),
+            };
+
+        private static void DumpContainerDiag(InventoryType type)
+        {
+            var container = InventoryManager.Instance()->GetInventoryContainer(type);
+            if (container == null)
+            {
+                Plugin.PluginLog.Info($"[Diag] {type} container=NULL");
+                return;
+            }
+            int nonEmpty = 0;
+            uint firstId = 0;
+            for (int i = 0; i < container->Size; i++)
+            {
+                var s = container->GetInventorySlot(i);
+                if (s != null && s->ItemId != 0)
+                {
+                    if (firstId == 0) firstId = s->ItemId;
+                    nonEmpty++;
+                }
+            }
+            Plugin.PluginLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
         }
     }
 }

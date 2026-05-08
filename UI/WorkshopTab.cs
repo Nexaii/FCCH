@@ -6,6 +6,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 using Lumina.Excel.Sheets;
 using FCCH.GameData;
@@ -14,7 +15,7 @@ using FCCH.Managers;
 
 namespace FCCH.UI
 {
-    public class WorkshopTab
+    public unsafe class WorkshopTab
     {
         private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
@@ -29,6 +30,9 @@ namespace FCCH.UI
 
         private HashSet<int> _expandedProjects = new HashSet<int>();
 
+        private bool _wasTabActive;
+        private int _lastShoppingListSignature;
+
         public WorkshopTab(ChestHelper helper, Configuration configuration, WorkshopCache cache, Common.WorkshoppaIPC workshoppaIpc)
         {
             _helper = helper;
@@ -39,6 +43,8 @@ namespace FCCH.UI
 
         public void Draw()
         {
+            MaybeAutoRefresh();
+
             DrawPresets();
             ImGui.Separator();
 
@@ -248,10 +254,68 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Refresh", new Vector2(refreshWidth, 0)))
             {
-                _helper.StartIndexing(false);
+                TryRefreshChestData();
             }
             ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Refresh Chest Data");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(IsChestAddonVisible()
+                    ? "Refresh Chest Data"
+                    : "Refresh Chest Data\nOpen the Company Chest to update.");
+            }
+        }
+
+        private void MaybeAutoRefresh()
+        {
+            int signature = ComputeShoppingListSignature();
+            bool tabJustActivated = !_wasTabActive;
+            bool listChanged = signature != _lastShoppingListSignature;
+            _wasTabActive = true;
+
+            if (_helper.ShoppingList.Count == 0)
+            {
+                _lastShoppingListSignature = signature;
+                return;
+            }
+
+            if (!tabJustActivated && !listChanged) return;
+
+            _lastShoppingListSignature = signature;
+
+            TryRefreshChestData();
+        }
+
+        public void OnTabDeactivated()
+        {
+            _wasTabActive = false;
+        }
+
+        private void TryRefreshChestData()
+        {
+            if (_helper.IsUserOperationActive) return;
+            if (!IsChestAddonVisible()) return;
+            _helper.StartIndexing(false);
+        }
+
+        private static bool IsChestAddonVisible()
+        {
+            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
+            return addon != null && addon->IsVisible;
+        }
+
+        private int ComputeShoppingListSignature()
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + _helper.ShoppingList.Count;
+                foreach (var item in _helper.ShoppingList)
+                {
+                    hash = hash * 31 + (int)item.Craft.WorkshopItemId;
+                    hash = hash * 31 + item.Quantity;
+                }
+                return hash;
+            }
         }
 
         private void AddProject(WorkshopCraft craft)

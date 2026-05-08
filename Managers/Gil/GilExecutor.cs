@@ -9,12 +9,14 @@ namespace FCCH.Managers.Gil
     public unsafe class GilExecutor
     {
         private readonly Configuration _configuration;
+        private readonly ChestManager _chestManager;
         private readonly MoveManager _moveManager;
         private readonly Action<PendingGilTransaction> _setPendingTransaction;
 
-        public GilExecutor(Configuration configuration, MoveManager moveManager, Action<PendingGilTransaction> setPendingTransaction)
+        public GilExecutor(Configuration configuration, ChestManager chestManager, MoveManager moveManager, Action<PendingGilTransaction> setPendingTransaction)
         {
             _configuration = configuration;
+            _chestManager = chestManager;
             _moveManager = moveManager;
             _setPendingTransaction = setPendingTransaction;
         }
@@ -27,9 +29,10 @@ namespace FCCH.Managers.Gil
                 return;
             }
 
-            if (!GilValidator.CanAccessGilTab())
+            var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
+            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
             {
-                ChatHelper.Error("Gil tab is not available. You may not have permission.");
+                ChatHelper.Info("Skipping gd for gil.");
                 return;
             }
 
@@ -74,9 +77,9 @@ namespace FCCH.Managers.Gil
                 return;
             }
 
-            if (!GilValidator.CanAccessGilTab())
+            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyGil) != Constants.FCPermissions.FULL_ACCESS)
             {
-                ChatHelper.Error("Gil tab is not available. You may not have permission.");
+                ChatHelper.Info("Skipping gw for gil.");
                 return;
             }
 
@@ -119,7 +122,8 @@ namespace FCCH.Managers.Gil
         public void AutoDeposit()
         {
             if (_configuration.GilMode == GilDepositMode.Disabled) return;
-            if (!GilValidator.CanAccessGilTab()) return;
+            var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
+            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY) return;
 
             uint amount = 0;
             uint playerGil = GilValidator.GetPlayerGil();

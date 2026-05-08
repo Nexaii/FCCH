@@ -11,5 +11,6 @@ namespace FCCH.Models
         public uint ItemId;
         public uint Amount;
         public bool IsNativeMove;
+        public bool PendingSplit;
     }
 }

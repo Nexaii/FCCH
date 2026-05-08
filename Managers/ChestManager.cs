@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
 using FCCH.Common;
+using FCCH.GameData;
 
 namespace FCCH.Managers
 {
@@ -17,7 +18,7 @@ namespace FCCH.Managers
         public void SwitchToPage(AtkUnitBase* addon, InventoryType targetPage)
         {
             if (addon == null) return;
-            
+
             int targetIndex = targetPage switch
             {
                 InventoryType.FreeCompanyPage1 => 0,
@@ -29,20 +30,25 @@ namespace FCCH.Managers
                 InventoryType.FreeCompanyGil => 6,
                 _ => -1
             };
-            
-            if (targetIndex == -1) 
+
+            if (targetIndex == -1)
             {
                 Plugin.PluginLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
                 return;
             }
 
             var values = stackalloc AtkValue[2];
-            values[0].Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int;
+            values[0].Type = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int;
             values[0].Int = 0;
-            values[1].Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int;
+            values[1].Type = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int;
             values[1].Int = targetIndex;
-            
+
             addon->FireCallback((uint)Constants.FC_CHEST_CALLBACK_ID, values);
+
+            if (targetPage != InventoryType.FreeCompanyGil)
+            {
+                GameMain.ExecuteCommand(404, (int)targetPage);
+            }
         }
 
         public Dictionary<InventoryType, List<ScannedSlot>> ChestState { get; private set; } = new();
@@ -69,6 +75,7 @@ namespace FCCH.Managers
 
         public int ScanFCChest()
         {
+            Common.PerfCounter.RecordScanFCChest();
             _inventoryScanner.Update();
             CachedItems.Clear();
             if (Plugin.ObjectTable.LocalPlayer != null)
@@ -108,17 +115,7 @@ namespace FCCH.Managers
                     var item = container->GetInventorySlot(i);
                     if (item == null || (item->ItemId == 0 && item->Quantity == 0)) continue;
 
-                    uint maxStack = 999;
-                    try
-                    {
-                        var sheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
-                        var row = sheet?.GetRowOrDefault(item->ItemId);
-                        if (row != null) maxStack = row.Value.StackSize;
-                    }
-                    catch (Exception ex)
-                    {
-                        Plugin.PluginLog.Warning($"Failed to get stack size for Item#{item->ItemId}: {ex.Message}");
-                    }
+                    uint maxStack = ItemStackCache.GetMaxStack(item->ItemId);
 
                     pageItems.Add(new ScannedSlot
                     {
@@ -160,7 +157,8 @@ namespace FCCH.Managers
 
         public void UpdateChestState(InventoryType page)
         {
-            _inventoryScanner.Update(); 
+            Common.PerfCounter.RecordUpdateChestState();
+            _inventoryScanner.Update();
             var container = _inventoryScanner.GetContainer(page);
             if (container == null) return;
 
@@ -170,17 +168,7 @@ namespace FCCH.Managers
                 var item = container->GetInventorySlot(i);
                 if (item == null || (item->ItemId == 0 && item->Quantity == 0)) continue;
 
-                uint maxStack = 999;
-                try
-                {
-                    var sheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
-                    var row = sheet?.GetRowOrDefault(item->ItemId);
-                    if (row != null) maxStack = row.Value.StackSize;
-                }
-                catch (Exception ex)
-                {
-                    Plugin.PluginLog.Warning($"Failed to get stack size for Item#{item->ItemId}: {ex.Message}");
-                }
+                uint maxStack = ItemStackCache.GetMaxStack(item->ItemId);
 
                 items.Add(new ScannedSlot
                 {
@@ -251,33 +239,155 @@ namespace FCCH.Managers
         {
             try
             {
-                var uiModule = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
-                if (uiModule == null) return Constants.FCPermissions.NO_ACCESS;
-                
-                var infoModule = uiModule->GetInfoModule();
-                if (infoModule == null) return Constants.FCPermissions.NO_ACCESS;
-
-                var fcProxy = (InfoProxyFreeCompany*)infoModule->GetInfoProxyById(InfoProxyId.FreeCompany);
-                if (fcProxy == null) return Constants.FCPermissions.NO_ACCESS;
-
-                byte rankIndex = fcProxy->Rank;
-                if (rankIndex >= 14) return Constants.FCPermissions.NO_ACCESS;
-
-                var rankData = fcProxy->Ranks[rankIndex];
-                
-                var access = page switch
+                var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+                if (addon != null && addon->IsVisible)
                 {
-                    InventoryType.FreeCompanyPage1 => rankData.Items1,
-                    InventoryType.FreeCompanyPage2 => rankData.Items2,
-                    InventoryType.FreeCompanyPage3 => rankData.Items3,
-                    InventoryType.FreeCompanyPage4 => rankData.Items4,
-                    InventoryType.FreeCompanyPage5 => rankData.Items5,
-                    _ => (InfoProxyFreeCompany.RankData.ChestAccess)Constants.FCPermissions.NO_ACCESS
-                };
-                return (byte)access;
+                    var p = (byte*)addon;
+                    uint packedItems = *(uint*)(p + 0x4DC);
+                    uint raw = page switch
+                    {
+                        InventoryType.FreeCompanyPage1    => packedItems & 3,
+                        InventoryType.FreeCompanyPage2    => (packedItems >> 2) & 3,
+                        InventoryType.FreeCompanyPage3    => (packedItems >> 4) & 3,
+                        InventoryType.FreeCompanyPage4    => (packedItems >> 6) & 3,
+                        InventoryType.FreeCompanyPage5    => (packedItems >> 8) & 3,
+                        InventoryType.FreeCompanyCrystals => *(uint*)(p + 0x4E0),
+                        InventoryType.FreeCompanyGil      => *(uint*)(p + 0x4E4),
+                        _ => 0
+                    };
+                    return MapAddonAccess(raw);
+                }
+
+                return Constants.FCPermissions.FULL_ACCESS;
             }
             catch { return Constants.FCPermissions.NO_ACCESS; }
         }
+
+        private static byte MapAddonAccess(uint raw) => raw switch
+        {
+            0 => Constants.FCPermissions.NO_ACCESS,
+            1 => Constants.FCPermissions.VIEW_ONLY,
+            2 => Constants.FCPermissions.DEPOSIT_ONLY,
+            3 => Constants.FCPermissions.FULL_ACCESS,
+            _ => Constants.FCPermissions.NO_ACCESS,
+        };
+
+        public static byte DecodeChestAccess(System.Span<byte> p, InventoryType page)
+        {
+            int combined = page switch
+            {
+                InventoryType.FreeCompanyPage1    => ((p[1] & 0x80) >> 7) | ((p[2] & 0x03) << 1) | ((p[4] & 0x10) >> 1),
+                InventoryType.FreeCompanyPage2    => ((p[2] & 0x1C) >> 2) | ((p[4] & 0x20) >> 2),
+                InventoryType.FreeCompanyPage3    => ((p[2] & 0xE0) >> 5) | ((p[4] & 0x40) >> 3),
+                InventoryType.FreeCompanyPage4    => (p[3] & 0x07) | ((p[4] & 0x80) >> 4),
+                InventoryType.FreeCompanyPage5    => ((p[3] & 0x38) >> 3) | ((p[5] & 0x01) << 3),
+                InventoryType.FreeCompanyCrystals => ((p[3] & 0xC0) >> 6) | ((p[4] & 0x01) << 2) | ((p[5] & 0x02) << 2),
+                InventoryType.FreeCompanyGil      => ((p[4] & 0x0E) >> 1) | ((p[5] & 0x04) << 1),
+                _ => 0
+            };
+
+            if ((combined & Constants.FCPermissions.FULL_ACCESS)  != 0) return Constants.FCPermissions.FULL_ACCESS;
+            if ((combined & Constants.FCPermissions.DEPOSIT_ONLY) != 0) return Constants.FCPermissions.DEPOSIT_ONLY;
+            if ((combined & Constants.FCPermissions.VIEW_ONLY)    != 0) return Constants.FCPermissions.VIEW_ONLY;
+            return Constants.FCPermissions.NO_ACCESS;
+        }
+
+        public void DumpRawPermissions(byte? overrideRank = null)
+        {
+            try
+            {
+                var uiModule = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
+                if (uiModule == null) { Plugin.PluginLog.Warning("[FCPerms] UIModule null."); return; }
+
+                var infoModule = uiModule->GetInfoModule();
+                if (infoModule == null) { Plugin.PluginLog.Warning("[FCPerms] InfoModule null."); return; }
+
+                var fcProxy = (InfoProxyFreeCompany*)infoModule->GetInfoProxyById(InfoProxyId.FreeCompany);
+                if (fcProxy == null) { Plugin.PluginLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
+
+                byte playerRank = fcProxy->Rank;
+                Plugin.PluginLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
+
+                if (overrideRank.HasValue)
+                {
+                    if (overrideRank.Value >= 14) { Plugin.PluginLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
+                    DumpRankRow(fcProxy, overrideRank.Value, playerRank);
+                    return;
+                }
+
+                for (byte i = 0; i < 14; i++) DumpRankRow(fcProxy, i, playerRank);
+            }
+            catch (Exception ex)
+            {
+                Plugin.PluginLog.Error(ex, "[FCPerms] Dump failed.");
+            }
+        }
+
+        public string DumpAccessProbe()
+        {
+            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            if (addon == null || !addon->IsVisible)
+            {
+                const string closed = "[AccessProbe] Company Chest addon is not open.";
+                Plugin.PluginLog.Info(closed);
+                return closed;
+            }
+
+            var p = (byte*)addon;
+            byte mode = *(p + 0x4D8);
+            byte selectedTab = *(p + 0x4D9);
+            byte page = *(p + 0x4DA);
+            uint packedItems = *(uint*)(p + 0x4DC);
+            uint crystal = *(uint*)(p + 0x4E0);
+            uint gil = *(uint*)(p + 0x4E4);
+            uint action = *(uint*)(p + 0x4E8);
+            byte visibleMode = *(p + 0x4ED);
+            uint visibleMask = *(uint*)(p + 0x4F0);
+            byte limitedMaskMode = *(p + 0x4F4);
+
+            uint tab1 = packedItems & 3;
+            uint tab2 = (packedItems >> 2) & 3;
+            uint tab3 = (packedItems >> 4) & 3;
+            uint tab4 = (packedItems >> 6) & 3;
+            uint tab5 = (packedItems >> 8) & 3;
+
+            string message = $"[AccessProbe] mode={mode} selectedTab={selectedTab} page={page} packedItems=0x{packedItems:X8} tabs=[1:{tab1},2:{tab2},3:{tab3},4:{tab4},5:{tab5}] crystal={crystal} gil={gil} action={action} visibleMode={visibleMode} visibleMask=0x{visibleMask:X8} limitedMaskMode={limitedMaskMode}";
+            Plugin.PluginLog.Info(message);
+            if (_configuration.DebugMode)
+                DebugFileLogger.Enqueue(_configuration.DebugLogPath, message);
+            return message;
+        }
+
+        private void DumpRankRow(InfoProxyFreeCompany* fcProxy, byte rankIndex, byte playerRank)
+        {
+            var rd = fcProxy->Ranks[rankIndex];
+            var p = rd.Permissions;
+
+            var hex = new System.Text.StringBuilder();
+            for (int i = 0; i < 10; i++) hex.Append($" {(byte)p[i]:X2}");
+
+            Plugin.PluginLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
+
+            byte d1 = DecodeChestAccess(p, InventoryType.FreeCompanyPage1);
+            byte d2 = DecodeChestAccess(p, InventoryType.FreeCompanyPage2);
+            byte d3 = DecodeChestAccess(p, InventoryType.FreeCompanyPage3);
+            byte d4 = DecodeChestAccess(p, InventoryType.FreeCompanyPage4);
+            byte d5 = DecodeChestAccess(p, InventoryType.FreeCompanyPage5);
+            byte dc = DecodeChestAccess(p, InventoryType.FreeCompanyCrystals);
+            byte dg = DecodeChestAccess(p, InventoryType.FreeCompanyGil);
+
+            Plugin.PluginLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
+            Plugin.PluginLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
+        }
+
+        public static string NameAccess(byte v) => v switch
+        {
+            Constants.FCPermissions.NO_ACCESS => "No Access",
+            Constants.FCPermissions.VIEW_ONLY => "View Only",
+            Constants.FCPermissions.FULL_ACCESS => "Full Access",
+            Constants.FCPermissions.DEPOSIT_ONLY => "Deposit Only",
+            _ => $"Unknown ({v})",
+        };
 
         public byte GetFCRank()
         {
@@ -326,25 +436,33 @@ namespace FCCH.Managers
 
         public List<InventoryType> GetDepositableTabs()
         {
-            var allTabs = GetAvailableTabs();
             var result = new List<InventoryType>();
-            
-            foreach (var tab in allTabs)
+            foreach (var tab in GetAvailableTabs())
             {
-                if (tab == InventoryType.FreeCompanyCrystals || tab == InventoryType.FreeCompanyGil)
-                {
-                    result.Add(tab);
-                    continue;
-                }
-                
+                if (tab == InventoryType.FreeCompanyGil || tab == InventoryType.FreeCompanyCrystals) continue;
                 var access = GetChestAccess(tab);
-                if (access == 0 || access == 2)
-                {
+                if (access == Constants.FCPermissions.FULL_ACCESS || access == Constants.FCPermissions.DEPOSIT_ONLY)
                     result.Add(tab);
-                }
             }
-            
             return result;
+        }
+
+        public List<InventoryType> GetWithdrawableTabs()
+        {
+            var result = new List<InventoryType>();
+            foreach (var tab in GetAvailableTabs())
+            {
+                if (tab == InventoryType.FreeCompanyGil || tab == InventoryType.FreeCompanyCrystals) continue;
+                if (GetChestAccess(tab) == Constants.FCPermissions.FULL_ACCESS)
+                    result.Add(tab);
+            }
+            return result;
+        }
+
+        public void ClearPage(InventoryType page)
+        {
+            ChestState.Remove(page);
+            CachedItems.RemoveAll(x => x.Page == page);
         }
 
         private bool IsNodeVisible(AtkUnitBase* addon, uint nodeId)
@@ -394,6 +512,8 @@ namespace FCCH.Managers
         
         public InventoryContainer* GetContainer(InventoryType type) => _inventoryScanner.GetContainer(type);
         public bool IsInventoryLoaded(InventoryType type) => _inventoryScanner.IsInventoryLoaded(type);
+        public void ResetIndexingSession() => _inventoryScanner.ResetSession();
+        public void MarkInventoryObserved(InventoryType type) => _inventoryScanner.MarkObserved(type);
 
         public string GetDebugContent()
         {

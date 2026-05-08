@@ -11,6 +11,7 @@ namespace FCCH.Managers.Gil
     public unsafe class GilManager : IDisposable
     {
         private readonly Configuration _configuration;
+        private readonly ChestManager _chestManager;
         private readonly GilExecutor _executor;
         private const string INPUT_NUMERIC_ADDON = "InputNumeric";
 
@@ -22,12 +23,12 @@ namespace FCCH.Managers.Gil
 
         private static readonly Regex AmountPattern = new(@"^([\d,]+(?:\.\d{1,2})?)([km%])?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public GilManager(Configuration configuration, MoveManager moveManager)
+        public GilManager(Configuration configuration, ChestManager chestManager, MoveManager moveManager)
         {
             _configuration = configuration;
-            _executor = new GilExecutor(configuration, moveManager, SetPendingTransaction);
+            _chestManager = chestManager;
+            _executor = new GilExecutor(configuration, chestManager, moveManager, SetPendingTransaction);
 
-            InitializeDebugHook();
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, INPUT_NUMERIC_ADDON, OnInputNumericSetup);
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "Bank", OnBankSetup);
         }
@@ -55,8 +56,8 @@ namespace FCCH.Managers.Gil
             try
             {
                 var values = stackalloc AtkValue[2];
-                values[0] = new AtkValue() { Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int, Int = (int)transaction.Amount };
-                values[1] = new AtkValue() { Type = FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int, Int = 0 };
+                values[0] = new AtkValue() { Type = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int, Int = (int)transaction.Amount };
+                values[1] = new AtkValue() { Type = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int, Int = 0 };
 
                 addon->FireCallback(1, values);
 
@@ -100,18 +101,49 @@ namespace FCCH.Managers.Gil
             }
         }
 
-        private void InitializeDebugHook()
+        private bool TryResolveDebugHook()
         {
+            if (_fireCallbackHook != null) return true;
             try
             {
                 var ptr = Plugin.SigScanner.ScanText(Callback.Sig);
                 _fireCallbackHook = Plugin.GameInteropProvider.HookFromAddress<FireCallbackDelegate>(ptr, FireCallbackDetour);
-                _fireCallbackHook.Enable();
-                Plugin.PluginLog.Info("[GilManager] Debug hook enabled for FireCallback");
+                Plugin.PluginLog.Info("[GilManager] Debug hook resolved for FireCallback");
+                return true;
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to initialize debug hook");
+                Plugin.PluginLog.Error(ex, "[GilManager] Failed to resolve debug hook");
+                return false;
+            }
+        }
+
+        private void EnableDebugHook()
+        {
+            if (!TryResolveDebugHook()) return;
+            if (_fireCallbackHook == null || _fireCallbackHook.IsEnabled) return;
+            try
+            {
+                _fireCallbackHook.Enable();
+                Plugin.PluginLog.Info("[GilManager] Debug hook enabled");
+            }
+            catch (Exception ex)
+            {
+                Plugin.PluginLog.Error(ex, "[GilManager] Failed to enable debug hook");
+            }
+        }
+
+        private void DisableDebugHook()
+        {
+            if (_fireCallbackHook == null || !_fireCallbackHook.IsEnabled) return;
+            try
+            {
+                _fireCallbackHook.Disable();
+                Plugin.PluginLog.Info("[GilManager] Debug hook disabled");
+            }
+            catch (Exception ex)
+            {
+                Plugin.PluginLog.Error(ex, "[GilManager] Failed to disable debug hook");
             }
         }
 
@@ -130,10 +162,10 @@ namespace FCCH.Managers.Gil
                         var val = values[i];
                         string valStr = val.Type switch
                         {
-                            FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Int => $"Int={val.Int}",
-                            FFXIVClientStructs.FFXIV.Component.GUI.ValueType.UInt => $"UInt={val.UInt}",
-                            FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Bool => $"Bool={val.Byte}",
-                            FFXIVClientStructs.FFXIV.Component.GUI.ValueType.Float => $"Float={val.Float}",
+                            FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int => $"Int={val.Int}",
+                            FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.UInt => $"UInt={val.UInt}",
+                            FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Bool => $"Bool={val.Byte}",
+                            FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Float => $"Float={val.Float}",
                             _ => $"Type={val.Type}"
                         };
                         ChatHelper.Info($"[DEBUG] values[{i}]: {valStr}");
@@ -148,16 +180,26 @@ namespace FCCH.Managers.Gil
         public void EnableDebugMode()
         {
             _debugMode = true;
+            EnableDebugHook();
             ChatHelper.Info("[GilManager] Debug mode ENABLED. Open Gil Transfer, enter amount, and click OK. Watch chat for callback data.");
         }
 
         public void DisableDebugMode()
         {
             _debugMode = false;
+            DisableDebugHook();
             ChatHelper.Info("[GilManager] Debug mode disabled.");
         }
 
-        public string GetPermissionString() => GilValidator.GetPermissionString();
+        public string GetPermissionString() => GilValidator.GetPermissionString(_chestManager);
+
+        public bool IsValidAmountSyntax(string args)
+        {
+            if (string.IsNullOrWhiteSpace(args)) return false;
+
+            var input = args.Trim().ToLower();
+            return input == "all" || AmountPattern.IsMatch(input);
+        }
 
         public void HandleDepositCommand(string args)
         {
@@ -169,6 +211,13 @@ namespace FCCH.Managers.Gil
 
             uint playerGil = GilValidator.GetPlayerGil();
             uint fcGil = GilValidator.GetFCGilHeader();
+
+            var access = _chestManager.GetChestAccess(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.FreeCompanyGil);
+            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
+            {
+                ChatHelper.Info("Skipping gd for gil.");
+                return;
+            }
 
             if (!TryParseAmount(args, playerGil, fcGil, true, out uint amount, out string error))
             {
@@ -189,6 +238,12 @@ namespace FCCH.Managers.Gil
 
             uint playerGil = GilValidator.GetPlayerGil();
             uint fcGil = GilValidator.GetFCGilHeader(); 
+
+            if (_chestManager.GetChestAccess(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.FreeCompanyGil) != Constants.FCPermissions.FULL_ACCESS)
+            {
+                ChatHelper.Info("Skipping gw for gil.");
+                return;
+            }
 
             if (!TryParseAmount(args, playerGil, fcGil, false, out uint amount, out string error))
             {
@@ -278,8 +333,19 @@ namespace FCCH.Managers.Gil
 
         public void Dispose()
         {
-            _fireCallbackHook?.Disable();
-            _fireCallbackHook?.Dispose();
+            try
+            {
+                if (_fireCallbackHook != null)
+                {
+                    if (_fireCallbackHook.IsEnabled) _fireCallbackHook.Disable();
+                    _fireCallbackHook.Dispose();
+                    _fireCallbackHook = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.PluginLog.Error(ex, "[GilManager] Error disposing debug hook");
+            }
             Plugin.AddonLifecycle.UnregisterListener(OnInputNumericSetup);
             Plugin.AddonLifecycle.UnregisterListener(OnBankSetup);
         }

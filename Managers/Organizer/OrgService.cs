@@ -125,7 +125,9 @@ namespace FCCH.Managers.Organizer
 
         public void Dispose()
         {
+            try { _executor.Cancel(); } catch { }
             _executor.OnJobCompleted -= HandleJobCompleted;
+            LastCheck = null;
         }
     }
 }

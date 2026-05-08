@@ -36,7 +36,15 @@ namespace FCCH
         public bool VerboseMode { get; set; } = false;
         public bool ListsOnRightSide { get; set; } = false;
         public bool IsWindowLocked { get; set; } = true;
-        public string DebugLogPath { get; set; } = "FCCH_Debug.log";
+        public float SettingsPosX { get; set; } = -1f;
+        public float SettingsPosY { get; set; } = -1f;
+
+        public bool ToolbarLocked { get; set; } = true;
+        public float ToolbarPosX { get; set; } = -1f;
+        public float ToolbarPosY { get; set; } = -1f;
+        public bool ToolbarSnapToGrid { get; set; } = false;
+
+        public string DebugLogPath { get; set; } = "";
 
         public bool LowerQualityOnDeposit { get; set; } = false;
         public bool PlayCompletionSound { get; set; } = false;
@@ -73,6 +81,39 @@ namespace FCCH
     {
         public uint ItemId { get; set; }
         public int Quantity { get; set; } = 1;
+        public CustomItemMode Mode { get; set; } = CustomItemMode.Withdraw;
+        public bool AlwaysMax { get; set; } = false;
+
+        public bool CanDeposit => Mode == CustomItemMode.Deposit || Mode == CustomItemMode.Both;
+        public bool CanWithdraw => Mode == CustomItemMode.Withdraw || Mode == CustomItemMode.Both;
+
+        public void CycleMode()
+        {
+            Mode = Mode switch
+            {
+                CustomItemMode.Withdraw => CustomItemMode.Deposit,
+                CustomItemMode.Deposit => CustomItemMode.Both,
+                _ => CustomItemMode.Withdraw
+            };
+        }
+
+        public WithdrawItem Clone()
+        {
+            return new WithdrawItem
+            {
+                ItemId = ItemId,
+                Quantity = Quantity,
+                Mode = Mode,
+                AlwaysMax = AlwaysMax
+            };
+        }
+    }
+
+    public enum CustomItemMode
+    {
+        Withdraw = 0,
+        Deposit = 1,
+        Both = 2
     }
 
     public class PresetData

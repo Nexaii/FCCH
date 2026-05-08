@@ -4,12 +4,24 @@ using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using FCCH.Common;
+using FCCH.GameData;
 using FCCH.Models;
 
 namespace FCCH.Managers
 {
     public unsafe static class OperationManager
     {
+        private static IReadOnlyList<InventoryType> FilterToItemPages(IReadOnlyList<InventoryType> tabs)
+        {
+            var result = new List<InventoryType>(tabs.Count);
+            foreach (var t in tabs)
+            {
+                if (t == InventoryType.FreeCompanyCrystals || t == InventoryType.FreeCompanyGil) continue;
+                result.Add(t);
+            }
+            return result;
+        }
+
         public static (InventoryType, int)? FindEmptyFCSlot(List<ChestManager.ScannedSlot> virtualFC, List<InventoryType> availableTabs, InventoryType? preferredPage = null, bool strict = false)
         {
             var occupiedSlots = new HashSet<(InventoryType, int)>();
@@ -50,10 +62,45 @@ namespace FCCH.Managers
             ChestManager chestManager,
             Configuration config,
             InventoryType[] playerInvTypes)
+            => CalculateDepositMovesCore(chestManager, config, playerInvTypes, chestManager.GetDepositableTabs());
+
+        public static List<MoveOperation> CalculateDepositMoves(
+            ChestManager chestManager,
+            Configuration config,
+            InventoryType[] playerInvTypes,
+            InventoryType targetTab)
+        {
+            var depositable = chestManager.GetDepositableTabs();
+            if (!depositable.Contains(targetTab))
+            {
+                int tabNum = ((int)targetTab - (int)InventoryType.FreeCompanyPage1) + 1;
+                ChatHelper.Warning($"Tab {tabNum} is not depositable (permissions or unavailable).");
+                return new List<MoveOperation>();
+            }
+            return CalculateDepositMovesCore(chestManager, config, playerInvTypes, new List<InventoryType> { targetTab });
+        }
+
+        public static List<MoveOperation> CalculateDepositMoves(
+            ChestManager chestManager,
+            Configuration config,
+            InventoryType[] playerInvTypes,
+            Dictionary<uint, int> itemsToDeposit)
+            => CalculateDepositMovesCore(chestManager, config, playerInvTypes, chestManager.GetDepositableTabs(), itemsToDeposit.ToDictionary(x => x.Key, x => (long)x.Value));
+
+        private static List<MoveOperation> CalculateDepositMovesCore(
+            ChestManager chestManager,
+            Configuration config,
+            InventoryType[] playerInvTypes,
+            IReadOnlyList<InventoryType> allowedTabs,
+            Dictionary<uint, long>? itemLimits = null)
         {
             var moves = new List<MoveOperation>();
             var virtualFC = chestManager.CachedItems.ToList();
-            var availableTabs = chestManager.GetDepositableTabs();
+            allowedTabs = FilterToItemPages(allowedTabs);
+            var allowedTabSet = new HashSet<InventoryType>(allowedTabs);
+            var remainingLimits = itemLimits?
+                .Where(x => x.Value > 0)
+                .ToDictionary(x => x.Key, x => x.Value);
             LastDepositOverflow.Clear();
 
             var stacksByItemId = new Dictionary<uint, List<ChestManager.ScannedSlot>>();
@@ -78,14 +125,20 @@ namespace FCCH.Managers
                     var item = container->GetInventorySlot(i);
                     if (item == null || item->ItemId == 0) continue;
 
-                    uint itemMaxStack = 999;
+                    long itemLimit = 0;
+                    if (remainingLimits != null
+                        && (!remainingLimits.TryGetValue(item->ItemId, out itemLimit) || itemLimit <= 0))
+                    {
+                        continue;
+                    }
+
+                    uint itemMaxStack = ItemStackCache.GetMaxStack(item->ItemId);
                     bool isUntradable = false;
                     try
                     {
                         var row = itemSheet?.GetRowOrDefault(item->ItemId);
                         if (row != null)
                         {
-                            itemMaxStack = row.Value.StackSize;
                             isUntradable = row.Value.IsUntradable;
                         }
                     }
@@ -98,14 +151,21 @@ namespace FCCH.Managers
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
                     uint remainingToDeposit = (uint)item->Quantity;
+                    if (remainingLimits != null)
+                    {
+                        remainingToDeposit = (uint)Math.Min(remainingToDeposit, itemLimit);
+                    }
 
                     bool isHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality;
                     uint srcSlot = (uint)i;
 
+                    uint sourceQty = (uint)item->Quantity;
+                    uint requestedFromSlot = remainingToDeposit;
+                    int firstMoveIndex = moves.Count;
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
-                        ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        ? stacks.Where(x => x.Quantity < x.MaxStack && allowedTabSet.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
-                    
+
                     foreach (var stack in partialStacks)
                     {
                         if (remainingToDeposit == 0) break;
@@ -133,7 +193,7 @@ namespace FCCH.Managers
 
                     while (remainingToDeposit > 0)
                     {
-                        var empty = FindEmptyFCSlot(virtualFC, availableTabs.ToList());
+                        var empty = FindEmptyFCSlot(virtualFC, allowedTabs.ToList());
                         if (empty == null) break;
 
                         uint transfer = Math.Min(remainingToDeposit, itemMaxStack);
@@ -165,6 +225,18 @@ namespace FCCH.Managers
                         stacksByItemId[newSlot.ItemId].Add(newSlot);
 
                         remainingToDeposit -= transfer;
+                    }
+
+                    if (moves.Count - firstMoveIndex == 1 && moves[firstMoveIndex].Amount == sourceQty)
+                    {
+                        var single = moves[firstMoveIndex];
+                        single.IsNativeMove = false;
+                        moves[firstMoveIndex] = single;
+                    }
+
+                    if (remainingLimits != null)
+                    {
+                        remainingLimits[item->ItemId] -= requestedFromSlot - remainingToDeposit;
                     }
 
                     if (remainingToDeposit > 0)
@@ -216,8 +288,6 @@ namespace FCCH.Managers
                 pagesByItemId[slot.ItemId].Add(slot.Page);
             }
 
-            var itemSheet = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Item>();
-
             foreach (var type in playerInvTypes)
             {
                 var container = chestManager.GetContainer(type);
@@ -230,22 +300,15 @@ namespace FCCH.Managers
 
                     uint remainingToDeposit = (uint)item->Quantity;
 
-                    uint itemMaxStack = 999;
-                    try
-                    {
-                        var row = itemSheet?.GetRowOrDefault(item->ItemId);
-                        if (row != null)
-                        {
-                            itemMaxStack = row.Value.StackSize;
-                        }
-                    }
-                    catch { }
+                    uint itemMaxStack = ItemStackCache.GetMaxStack(item->ItemId);
 
                     if (config.CrystalConfig.EnabledIds.Contains(item->ItemId)) continue;
 
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
                     uint srcSlot = (uint)i;
+                    uint sourceQty = (uint)item->Quantity;
+                    int firstMoveIndex = moves.Count;
 
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
                         ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
@@ -328,6 +391,13 @@ namespace FCCH.Managers
                             }
                         }
                     }
+
+                    if (moves.Count - firstMoveIndex == 1 && moves[firstMoveIndex].Amount == sourceQty)
+                    {
+                        var single = moves[firstMoveIndex];
+                        single.IsNativeMove = false;
+                        moves[firstMoveIndex] = single;
+                    }
                 }
             }
 
@@ -343,7 +413,9 @@ namespace FCCH.Managers
             Configuration config,
             Dictionary<uint, int> itemsToWithdraw,
             InventoryType[] playerInvTypes,
-            bool ignoreLeaveOneRule = false)
+            bool ignoreLeaveOneRule = false,
+            InventoryType? sourcePageFilter = null,
+            IReadOnlySet<InventoryType>? sourcePages = null)
         {
             var moves = new List<MoveOperation>();
             LastWithdrawOverflow.Clear();
@@ -372,9 +444,12 @@ namespace FCCH.Managers
                 if (config.IgnoreList.Any(x => x.ItemId == itemId && x.IgnoreWithdraw)) continue;
 
                 int amountNeeded = req.Value;
+                int totalRequested = req.Value;
 
                 var chestItems = chestManager.CachedItems
                     .Where(x => x.ItemId == itemId)
+                    .Where(x => sourcePageFilter == null || x.Page == sourcePageFilter)
+                    .Where(x => sourcePages == null || sourcePages.Contains(x.Page))
                     .OrderByDescending(x => x.Quantity)
                     .ToList();
 
@@ -389,7 +464,14 @@ namespace FCCH.Managers
                     }
 
                     uint remainingFromThisSlot = (uint)Math.Min(amountNeeded, (int)availableFromSlot);
-                    
+                    int firstMoveIndex = moves.Count;
+                    uint intendedTotal = remainingFromThisSlot;
+
+                    if (config.DebugMode)
+                    {
+                        Plugin.PluginLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
+                    }
+
                     while (remainingFromThisSlot > 0)
                     {
                         var dst = FindSpaceInPlayerInventory(playerSlots, itemId, chestSlot.IsHq, playerInvTypes, 1, chestSlot.MaxStack);
@@ -413,9 +495,18 @@ namespace FCCH.Managers
                         });
 
                         playerSlots[(dst.Type, dst.Slot)] = (itemId, currentSlot.Quantity + transfer, chestSlot.IsHq);
-                        
+
                         remainingFromThisSlot -= transfer;
                         amountNeeded -= (int)transfer;
+                    }
+
+                    if (moves.Count - firstMoveIndex == 1
+                        && moves[firstMoveIndex].Amount == chestSlot.Quantity
+                        && intendedTotal == chestSlot.Quantity)
+                    {
+                        var single = moves[firstMoveIndex];
+                        single.IsNativeMove = false;
+                        moves[firstMoveIndex] = single;
                     }
 
                     if (remainingFromThisSlot > 0)
@@ -426,6 +517,13 @@ namespace FCCH.Managers
                         else
                             LastWithdrawOverflow.Add((itemId, remainingFromThisSlot));
                     }
+                }
+
+                if (config.DebugMode)
+                {
+                    int overflow = amountNeeded > 0 ? amountNeeded : 0;
+                    int queued = totalRequested - overflow;
+                    Plugin.PluginLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
                 }
             }
 

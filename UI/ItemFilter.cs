@@ -11,7 +11,13 @@ namespace FCCH.UI
         private readonly IDataManager _dataManager;
         
         private HashSet<uint> _craftableItemIds = new();
-        
+
+        private static readonly HashSet<string> _alwaysIncludeNames = new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "Ceruleum Tank",
+            "Magitek Repair Materials",
+        };
+
         private List<Item> _filteredItems = new();
         
         private string _searchQuery = "";
@@ -40,9 +46,10 @@ namespace FCCH.UI
                 if (string.IsNullOrEmpty(item.Name.ToString())) continue;
 
                 bool isCraftable = _craftableItemIds.Contains(item.RowId);
-                bool isFcStorable = !item.IsUntradable; 
-                
-                if (isCraftable && isFcStorable)
+                bool isFcStorable = !item.IsUntradable;
+                bool isWhitelisted = _alwaysIncludeNames.Contains(item.Name.ToString());
+
+                if ((isCraftable && isFcStorable) || isWhitelisted)
                 {
                     _filteredItems.Add(item);
                 }
