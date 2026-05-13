@@ -51,7 +51,9 @@ namespace FCCH.Managers
 
         public void Dispose()
         {
+            try { _sendInventoryRefreshHook?.Disable(); } catch (Exception e) { try { Plugin.PluginLog.Error(e, "[OpLockManager] Hook disable threw."); } catch { } }
             _sendInventoryRefreshHook?.Dispose();
+            _sendInventoryRefreshHook = null;
         }
     }
 }

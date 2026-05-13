@@ -44,8 +44,8 @@ namespace FCCH.Managers
             }
             else
             {
-                Plugin.PluginLog.Warning("[InventoryScanner] FC bitset setter signature mismatch — hook not resolved.");
-                DebugLog("[InventoryScanner] FC bitset setter signature mismatch — hook not resolved.");
+                Plugin.PluginLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
+                DebugLog("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
             }
         }
 

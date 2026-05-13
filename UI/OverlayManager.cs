@@ -167,47 +167,71 @@ namespace FCCH.UI
         public override void Draw()
         {
             PersistDriftIfUnlocked();
+            var gate = _helper.CanStartUserAction();
+            _configuration.EnsureToolbarButtons();
 
-            DrawIconButton(FontAwesomeIcon.Cog, "Settings", "Settings",
-                onClick: () => _helper.IsSettingsVisible = !_helper.IsSettingsVisible);
-
-            ImGui.SameLine();
-            DrawSplitButtonWithDropdown(
-                FontAwesomeIcon.ArrowDown, "DepMenu",
-                "Deposit\nClick for tab options",
-                ref _depositMenuOpen, ref _depositMenuAnchor, DepositPopupId,
-                DrawDepositMenuItems);
-
-            ImGui.SameLine();
-            DrawIconButton(FontAwesomeIcon.Clone, "Dupes", "Deposit Duplicates",
-                onClick: () => RequestDeposit("Deposit all duplicates?", () => _helper.DepositDuplicates()));
-
-            ImGui.SameLine();
-            DrawIconButton(FontAwesomeIcon.FileAlt, "DepCustom", "Deposit Custom List",
-                onClick: () => RequestDeposit("Deposit Custom list?", () => _helper.DepositCustomItems()));
-
-            ImGui.SameLine();
-            DrawCrystalButton();
-
-            ImGui.SameLine();
-            DrawSplitButtonWithDropdown(
-                FontAwesomeIcon.ArrowUp, "WithMenu",
-                "Withdraw\nClick for tab options",
-                ref _withdrawMenuOpen, ref _withdrawMenuAnchor, WithdrawPopupId,
-                DrawWithdrawMenuItems);
-
-            ImGui.SameLine();
-            DrawIconButton(FontAwesomeIcon.FileAlt, "Custom", "Withdraw Custom List",
-                onClick: () => RequestWithdraw("Withdraw Custom list?", () => _helper.WithdrawCustomItems()));
-
-            ImGui.SameLine();
-            DrawIconButton(FontAwesomeIcon.ListUl, "Workshop", "Withdraw Workshop List",
-                onClick: () => RequestWithdraw("Withdraw Workshop List?", () => _helper.WithdrawWorkshopItems()));
+            var first = true;
+            foreach (var button in _configuration.ToolbarButtons)
+            {
+                if (!button.IsVisible) continue;
+                if (!first) ImGui.SameLine();
+                DrawToolbarButton(button.Id, gate);
+                first = false;
+            }
 
             DrawConfirmationModal("Confirm Deposit", _confirmMessage, ref _showDepositConfirm, true);
             DrawConfirmationModal("Confirm Withdraw", _confirmMessage, ref _showWithdrawConfirm, false);
 
             LastHeight = ImGui.GetWindowSize().Y;
+        }
+
+        private void DrawToolbarButton(ToolbarButtonId id, ActionGateResult gate)
+        {
+            var gated = id != ToolbarButtonId.Settings;
+            if (gated && !gate.CanRun) ImGui.BeginDisabled();
+
+            switch (id)
+            {
+                case ToolbarButtonId.Settings:
+                    DrawIconButton(FontAwesomeIcon.Cog, "Settings", "Settings",
+                        onClick: () => _helper.IsSettingsVisible = !_helper.IsSettingsVisible);
+                    break;
+                case ToolbarButtonId.Deposit:
+                    DrawSplitButtonWithDropdown(
+                        FontAwesomeIcon.ArrowDown, "DepMenu",
+                        ActionTooltip("Deposit\nClick for tab options", gate),
+                        ref _depositMenuOpen, ref _depositMenuAnchor, DepositPopupId,
+                        () => DrawDepositMenuItems(gate));
+                    break;
+                case ToolbarButtonId.DepositCustom:
+                    DrawIconButton(FontAwesomeIcon.FileAlt, "DepCustom", ActionTooltip("Deposit Custom List", gate),
+                        onClick: () => RequestDeposit("Deposit Custom list?", () => _helper.DepositCustomItems()));
+                    break;
+                case ToolbarButtonId.DepositDuplicates:
+                    DrawIconButton(FontAwesomeIcon.Clone, "Dupes", ActionTooltip("Deposit Duplicates", gate),
+                        onClick: () => RequestDeposit("Deposit all duplicates?", () => _helper.DepositDuplicates()));
+                    break;
+                case ToolbarButtonId.Crystals:
+                    DrawCrystalButton(gate);
+                    break;
+                case ToolbarButtonId.Withdraw:
+                    DrawSplitButtonWithDropdown(
+                        FontAwesomeIcon.ArrowUp, "WithMenu",
+                        ActionTooltip("Withdraw\nClick for tab options", gate),
+                        ref _withdrawMenuOpen, ref _withdrawMenuAnchor, WithdrawPopupId,
+                        () => DrawWithdrawMenuItems(gate));
+                    break;
+                case ToolbarButtonId.WithdrawCustom:
+                    DrawIconButton(FontAwesomeIcon.FileAlt, "Custom", ActionTooltip("Withdraw Custom List", gate),
+                        onClick: () => RequestWithdraw("Withdraw Custom list?", () => _helper.WithdrawCustomItems()));
+                    break;
+                case ToolbarButtonId.WithdrawWorkshop:
+                    DrawIconButton(FontAwesomeIcon.ListUl, "Workshop", ActionTooltip("Withdraw Workshop List", gate),
+                        onClick: () => RequestWithdraw("Withdraw Workshop List?", () => _helper.WithdrawWorkshopItems()));
+                    break;
+            }
+
+            if (gated && !gate.CanRun) ImGui.EndDisabled();
         }
 
         private void PersistDriftIfUnlocked()
@@ -241,13 +265,13 @@ namespace FCCH.UI
             ImGui.PopStyleColor();
             ImGui.PopFont();
 
-            if (!string.IsNullOrEmpty(tooltip) && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
+            if (!string.IsNullOrEmpty(tooltip) && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(tooltip);
 
             if (clicked && onClick != null) onClick();
             return clicked;
         }
 
-        private void DrawCrystalButton()
+        private void DrawCrystalButton(ActionGateResult gate)
         {
             var crystalColor = _lastCrystalAction switch
             {
@@ -274,7 +298,7 @@ namespace FCCH.UI
             ImGui.PopStyleColor(2);
             ImGui.PopFont();
 
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Crystals\nLeft Click: Deposit\nRight Click: Withdraw");
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(ActionTooltip("Crystals\nLeft Click: Deposit\nRight Click: Withdraw", gate));
         }
 
         private void DrawSplitButtonWithDropdown(
@@ -323,8 +347,10 @@ namespace FCCH.UI
             if (!ImGui.IsPopupOpen(popupId)) openFlag = false;
         }
 
-        private void DrawDepositMenuItems()
+        private void DrawDepositMenuItems(ActionGateResult gate)
         {
+            if (!gate.CanRun) ImGui.BeginDisabled();
+
             if (ImGui.Selectable("Deposit All", false, ImGuiSelectableFlags.None, SubmenuItemSize))
                 RequestDeposit("Deposit ALL allowed items?", () => _helper.DepositAll());
 
@@ -336,10 +362,14 @@ namespace FCCH.UI
                 if (ImGui.Selectable($"Deposit Tab {tab}", false, ImGuiSelectableFlags.None, SubmenuItemSize))
                     RequestDeposit($"Deposit eligible items to Tab {tab}?", () => _helper.DepositToTab(tab));
             }
+
+            if (!gate.CanRun) ImGui.EndDisabled();
         }
 
-        private void DrawWithdrawMenuItems()
+        private void DrawWithdrawMenuItems(ActionGateResult gate)
         {
+            if (!gate.CanRun) ImGui.BeginDisabled();
+
             if (ImGui.Selectable("Withdraw All", false, ImGuiSelectableFlags.None, SubmenuItemSize))
                 RequestWithdraw("Withdraw ALL items?", () => _helper.WithdrawAll());
 
@@ -351,13 +381,22 @@ namespace FCCH.UI
                 if (ImGui.Selectable($"Withdraw Tab {tab}", false, ImGuiSelectableFlags.None, SubmenuItemSize))
                     RequestWithdraw($"Withdraw all items from Tab {tab}?", () => _helper.WithdrawFromTab(tab));
             }
+
+            if (!gate.CanRun) ImGui.EndDisabled();
         }
 
         private void RequestDeposit(string message, Action action)
         {
+            var gate = _helper.CanStartUserAction();
+            if (!gate.CanRun)
+            {
+                ChatHelper.Warning(gate.Reason);
+                return;
+            }
+
             if (_configuration.DisableAskDepositAll)
             {
-                action();
+                _helper.TryStartUserAction(action);
                 return;
             }
             _confirmMessage = message;
@@ -369,9 +408,16 @@ namespace FCCH.UI
 
         private void RequestWithdraw(string message, Action action)
         {
+            var gate = _helper.CanStartUserAction();
+            if (!gate.CanRun)
+            {
+                ChatHelper.Warning(gate.Reason);
+                return;
+            }
+
             if (_configuration.DisableAskWithdrawAll)
             {
-                action();
+                _helper.TryStartUserAction(action);
                 return;
             }
             _confirmMessage = message;
@@ -397,7 +443,8 @@ namespace FCCH.UI
                         else _configuration.DisableAskWithdrawAll = true;
                         _configuration.Save();
                     }
-                    _pendingConfirmAction?.Invoke();
+                    if (_pendingConfirmAction != null)
+                        _helper.TryStartUserAction(_pendingConfirmAction);
                     showFlag = false;
                     ImGui.CloseCurrentPopup();
                 }
@@ -407,6 +454,9 @@ namespace FCCH.UI
             }
         }
         public void Dispose() { }
+
+        private static string ActionTooltip(string readyTooltip, ActionGateResult gate)
+            => gate.CanRun ? readyTooltip : gate.Reason;
     }
 
     public class StopWindow : Window, IDisposable

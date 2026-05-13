@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FCCH.Managers;
 using FCCH.Managers.Organizer;
 using FCCH.Common;
 
@@ -14,6 +15,7 @@ namespace FCCH.UI
     {
         private readonly OrgService _service;
         private readonly Configuration _config;
+        private readonly ChestHelper _helper;
 
         private int _selectedModeIndex = 0;
         private int _selectedSourceIndex = 1;
@@ -25,10 +27,11 @@ namespace FCCH.UI
         private int _chestClosedFrames = 0;
         private const int CHEST_CLOSE_THRESHOLD = 3;
 
-        public OrganizerTab(OrgService service, Configuration config)
+        public OrganizerTab(OrgService service, Configuration config, ChestHelper helper)
         {
             _service = service;
             _config = config;
+            _helper = helper;
             SyncRequestFromUI();
         }
 
@@ -335,8 +338,7 @@ namespace FCCH.UI
                             ImGui.TableNextRow();
                             ImGui.TableNextColumn();
                             string mergeTag = item.WillMerge ? " (M)" : "";
-                            ImGui.Text($"{item.ItemName}{mergeTag}");
-                            if (item.WillMerge && ImGui.IsItemHovered()) ImGui.SetTooltip("Will merge with existing stack");
+                            ItemNameDisplay.Text(item.ItemId, item.ItemName, _config, mergeTag, item.WillMerge ? "Will merge with existing stack" : null);
 
                             ImGui.TableNextColumn();
                             ImGui.Text($"{item.Quantity}");
@@ -402,25 +404,28 @@ namespace FCCH.UI
                 ImGui.TableNextColumn();
                 bool isRunning = status == OrgJobStatus.Running;
                 bool conflict = !isSort && (_selectedSourceIndex == _selectedDestIndex);
+                var gate = _helper.CanStartUserAction();
+                bool blocked = !gate.CanRun && !isRunning;
                 bool canRun = !conflict && check != null && check.IsValid;
                 string buttonLabel = isRunning ? "Cancel" : (canRun ? GetActionLabel() : "Check");
 
-                if (conflict) ImGui.BeginDisabled();
+                if (conflict || blocked) ImGui.BeginDisabled();
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, isRunning ? new Vector4(0.8f, 0.2f, 0.2f, 1.0f) : style.Colors[(int)ImGuiCol.TabHovered]);
                 if (ImGui.Button(buttonLabel, new Vector2(-1, 30)))
                 {
                     if (isRunning)
                         _service.Cancel();
                     else if (canRun)
-                        _service.Run();
+                        _helper.TryStartUserAction(() => _service.Run());
                     else
-                        _service.Check();
+                        _helper.TryStartUserAction(() => _service.Check());
                 }
                 ImGui.PopStyleColor();
-                if (conflict) ImGui.EndDisabled();
-                if (ImGui.IsItemHovered())
+                if (conflict || blocked) ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
                 {
                     if (conflict) ImGui.SetTooltip("Source and Destination cannot be the same");
+                    else if (blocked) ImGui.SetTooltip(gate.Reason);
                     else if (isRunning) ImGui.SetTooltip("Cancel the current operation");
                     else if (canRun) ImGui.SetTooltip("Execute the operation");
                     else ImGui.SetTooltip("Check if operation is valid");
@@ -498,7 +503,6 @@ namespace FCCH.UI
 
         public void Dispose()
         {
-            _service?.Dispose();
         }
     }
 }

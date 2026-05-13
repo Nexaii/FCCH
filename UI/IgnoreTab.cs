@@ -9,6 +9,7 @@ using Dalamud.Interface.Colors;
 using Lumina.Excel.Sheets;
 using FCCH;
 using FCCH.Managers;
+using FCCH.Common;
 
 namespace FCCH.UI
 {
@@ -25,12 +26,6 @@ namespace FCCH.UI
         private string _presetNameInput = "";
         private string _selectedPresetName = "";
         private bool _showSavePresetModal = false;
-
-        private static readonly HashSet<string> _alwaysIncludeNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Ceruleum Tank",
-            "Magitek Repair Materials",
-        };
 
         public IgnoreTab(ChestHelper helper, Configuration configuration)
         {
@@ -80,45 +75,12 @@ namespace FCCH.UI
             {
                 if (ImGui.BeginChild("IgnoreListScroll", new Vector2(0, -footerHeight), true))
                 {
-                    if (ImGui.BeginTable("IgnoreListTable", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+                    if (ImGui.BeginTable("IgnoreListTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
                     {
                         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Dep", ImGuiTableColumnFlags.WidthFixed, 35);
-                        ImGui.TableSetupColumn("Wit", ImGuiTableColumnFlags.WidthFixed, 35);
-                        ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, 25);
-                        
-                        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-                        ImGui.TableNextColumn();
-                        ImGui.Text("Item");
-                        
-                        ImGui.TableNextColumn();
-                        ImGui.PushFont(UiBuilder.IconFont);
-                        var depIcon = FontAwesomeIcon.ArrowDown.ToIconString();
-                        var iconWidth = ImGui.CalcTextSize(depIcon).X;
-                        var colWidth = ImGui.GetColumnWidth();
-                        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colWidth - iconWidth) * 0.5f);
-                        ImGui.TextColored(new Vector4(0f, 1f, 1f, 1f), depIcon);
-                        ImGui.PopFont();
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Deposit");
-
-                        ImGui.TableNextColumn();
-                        ImGui.PushFont(UiBuilder.IconFont);
-                        var witIcon = FontAwesomeIcon.ArrowUp.ToIconString();
-                        iconWidth = ImGui.CalcTextSize(witIcon).X;
-                        colWidth = ImGui.GetColumnWidth();
-                        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colWidth - iconWidth) * 0.5f);
-                        ImGui.TextColored(new Vector4(1f, 0.64f, 0f, 1f), witIcon);
-                        ImGui.PopFont();
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Withdraw");
-
-                        ImGui.TableNextColumn();
-                        var delIcon = FontAwesomeIcon.Trash.ToIconString();
-                        iconWidth = ImGui.CalcTextSize(delIcon).X;
-                        colWidth = ImGui.GetColumnWidth();
-                        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colWidth - iconWidth) * 0.5f);
-                        ImGui.PushFont(UiBuilder.IconFont);
-                        ImGui.TextDisabled(delIcon);
-                        ImGui.PopFont();
+                        ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                        ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                        ImGui.TableHeadersRow();
 
                         var sortedItems = _helper.Configuration.IgnoreList
                             .Select(x => new { Item = x, Name = _helper.GetItemName(x.ItemId) })
@@ -135,55 +97,24 @@ namespace FCCH.UI
 
                             ImGui.TableNextColumn();
                             ImGui.AlignTextToFramePadding();
-                            bool isActive = gItem.Item.IgnoreEntrust || gItem.Item.IgnoreWithdraw;
-                            if (isActive)
+                            if (IsIgnored(gItem.Item))
                             {
-                                ImGui.TextColored(ImGuiColors.DalamudOrange, gItem.Name);
+                                ItemNameDisplay.TextColored(gItem.Item.ItemId, gItem.Name, ImGuiColors.DalamudOrange, _configuration);
                             }
                             else
                             {
-                                ImGui.TextDisabled(gItem.Name);
+                                ItemNameDisplay.TextDisabled(gItem.Item.ItemId, gItem.Name, _configuration);
                             }
 
                             ImGui.TableNextColumn();
-                            bool entrust = gItem.Item.IgnoreEntrust;
-                            var chkWidth = ImGui.GetFrameHeight();
-                            var colW = ImGui.GetColumnWidth();
-                            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colW - chkWidth) * 0.5f);
-                            if (ImGui.Checkbox("##dep", ref entrust))
-                            {
-                                gItem.Item.IgnoreEntrust = entrust;
-                                _helper.Configuration.Save();
-                            }
-                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Deposit");
+                            DrawModeButton(gItem.Item);
 
                             ImGui.TableNextColumn();
-                            bool withdraw = gItem.Item.IgnoreWithdraw;
-                            colW = ImGui.GetColumnWidth();
-                            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colW - chkWidth) * 0.5f);
-                            if (ImGui.Checkbox("##wit", ref withdraw))
-                            {
-                                gItem.Item.IgnoreWithdraw = withdraw;
-                                _helper.Configuration.Save();
-                            }
-                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip on Withdraw");
-
-                            ImGui.TableNextColumn();
-                            ImGui.PushFont(UiBuilder.IconFont);
-                            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
-                            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
-                            var btnW = ImGui.CalcTextSize(FontAwesomeIcon.Minus.ToIconString()).X + ImGui.GetStyle().FramePadding.X * 2;
-                            colW = ImGui.GetColumnWidth();
-                            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (colW - btnW) * 0.5f);
-                            
-                            if (ImGui.Button(FontAwesomeIcon.Minus.ToIconString()))
+                            CellActionButton.DrawIcon(FontAwesomeIcon.Minus, "delete", "Remove", () =>
                             {
                                 _helper.Configuration.IgnoreList.Remove(gItem.Item);
                                 _helper.Configuration.Save();
-                            }
-                            ImGui.PopStyleColor(2);
-                            ImGui.PopFont();
-                            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove from ignore list");
+                            }, true);
 
                             ImGui.PopID();
                         }
@@ -197,6 +128,58 @@ namespace FCCH.UI
             DrawSearchBox();
 
             DrawSavePresetModal();
+        }
+
+        private void DrawModeButton(Configuration.IgnoredItem item)
+        {
+            CellActionButton.DrawIcon(GetModeIcon(item), "mode", $"{GetModeLabel(item)}\nClick to cycle mode", () =>
+            {
+                CycleMode(item);
+                _helper.Configuration.Save();
+            });
+        }
+
+        private static void CycleMode(Configuration.IgnoredItem item)
+        {
+            var deposit = item.IgnoreEntrust;
+            var withdraw = item.IgnoreWithdraw;
+
+            if (!deposit && withdraw)
+            {
+                item.IgnoreEntrust = true;
+                item.IgnoreWithdraw = false;
+                return;
+            }
+
+            if (deposit && !withdraw)
+            {
+                item.IgnoreEntrust = true;
+                item.IgnoreWithdraw = true;
+                return;
+            }
+
+            item.IgnoreEntrust = false;
+            item.IgnoreWithdraw = true;
+        }
+
+        private static bool IsIgnored(Configuration.IgnoredItem item)
+        {
+            return item.IgnoreEntrust || item.IgnoreWithdraw;
+        }
+
+        private static string GetModeLabel(Configuration.IgnoredItem item)
+        {
+            if (item.IgnoreEntrust && item.IgnoreWithdraw) return "Skip Deposit and Withdraw";
+            if (item.IgnoreEntrust) return "Skip Deposit";
+            if (item.IgnoreWithdraw) return "Skip Withdraw";
+            return "Not Ignored";
+        }
+
+        private static FontAwesomeIcon GetModeIcon(Configuration.IgnoredItem item)
+        {
+            if (item.IgnoreEntrust && item.IgnoreWithdraw) return FontAwesomeIcon.ArrowsAltV;
+            if (item.IgnoreEntrust) return FontAwesomeIcon.ArrowDown;
+            return FontAwesomeIcon.ArrowUp;
         }
 
         private void DrawSearchBox()
@@ -248,10 +231,7 @@ namespace FCCH.UI
                     var name = i.Name.ToString();
                     if (string.IsNullOrEmpty(name)) return false;
                     if (!name.Contains(_ignoreSearchFilter, StringComparison.OrdinalIgnoreCase)) return false;
-                    if (_alwaysIncludeNames.Contains(name)) return true;
-                    return !i.IsUntradable
-                        && i.RowId != 1
-                        && !(i.RowId >= 2 && i.RowId <= 19);
+                    return ItemListEligibility.IsAllowed(i);
                 }).Take(20).ToArray();
             }
             else

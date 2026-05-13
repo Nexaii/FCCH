@@ -14,6 +14,7 @@ namespace FCCH.UI
     {
         private readonly global::FCCH.Configuration _configuration;
         private readonly global::FCCH.Managers.CrystalManager _manager;
+        private readonly ChestHelper _helper;
 
         private static readonly string[] ElementNames = { "Fire", "Ice", "Wind", "Earth", "Lightning", "Water" };
         private static readonly string[] ElementIcons = { "\uE0C6", "\uE0C7", "\uE0C9", "\uE0C8", "\uE0CA", "\uE0CB" };
@@ -27,10 +28,11 @@ namespace FCCH.UI
             new uint[] { 7, 13, 19 }
         };
 
-        public CrystalTabUI(global::FCCH.Configuration configuration, global::FCCH.Managers.CrystalManager manager)
+        public CrystalTabUI(global::FCCH.Configuration configuration, global::FCCH.Managers.CrystalManager manager, ChestHelper helper)
         {
             _configuration = configuration;
             _manager = manager;
+            _helper = helper;
         }
 
         public void Draw()
@@ -146,12 +148,16 @@ namespace FCCH.UI
                 float cursorX = (ImGui.GetContentRegionAvail().X - totalGroupWidth) * 0.5f;
                 if (cursorX < 0) cursorX = 0;
                 ImGui.SetCursorPosX(cursorX);
+                var gate = _helper.CanStartUserAction();
+                if (!gate.CanRun) ImGui.BeginDisabled();
 
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, style.Colors[(int)ImGuiCol.TabHovered]);
-                if (ImGui.Button("Deposit Crystals", new Vector2(btnWidth, 0))) _manager.Deposit(true);
+                if (ImGui.Button("Deposit Crystals", new Vector2(btnWidth, 0))) _helper.TryStartUserAction(() => _manager.Deposit(true));
                 ImGui.SameLine();
-                if (ImGui.Button("Withdraw Crystals", new Vector2(btnWidth, 0))) _manager.Withdraw(true);
+                if (ImGui.Button("Withdraw Crystals", new Vector2(btnWidth, 0))) _helper.TryStartUserAction(() => _manager.Withdraw(true));
                 ImGui.PopStyleColor();
+                if (!gate.CanRun) ImGui.EndDisabled();
+                if (!gate.CanRun && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(gate.Reason);
 
                 ImGui.EndChild();
             }

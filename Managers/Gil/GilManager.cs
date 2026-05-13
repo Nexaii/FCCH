@@ -193,6 +193,11 @@ namespace FCCH.Managers.Gil
 
         public string GetPermissionString() => GilValidator.GetPermissionString(_chestManager);
 
+        public void CancelPendingTransaction()
+        {
+            _pendingTransaction = null;
+        }
+
         public bool IsValidAmountSyntax(string args)
         {
             if (string.IsNullOrWhiteSpace(args)) return false;

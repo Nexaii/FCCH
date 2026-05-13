@@ -9,6 +9,7 @@ using Dalamud.Interface.Colors;
 using Lumina.Excel.Sheets;
 using FCCH.GameData;
 using FCCH.Managers;
+using FCCH.Common;
 
 namespace FCCH.UI
 {
@@ -16,18 +17,13 @@ namespace FCCH.UI
     {
         private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
+        private const string NumericColumnSample = "12345678";
 
         private string _searchFilter = "";
 
         private string _presetNameInput = "";
         private string _selectedPresetName = "";
         private bool _showSavePresetModal = false;
-
-        private static readonly HashSet<string> _alwaysIncludeNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Ceruleum Tank",
-            "Magitek Repair Materials",
-        };
 
         public CustomTab(ChestHelper helper, Configuration configuration)
         {
@@ -80,12 +76,14 @@ namespace FCCH.UI
                 {
                     if (ImGui.BeginTable("CustomItemsTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
                     {
+                        float numericColumnWidth = ImGui.CalcTextSize(NumericColumnSample).X + ImGui.GetStyle().FramePadding.X * 2;
+
                         ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, 70);
-                        ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, 70);
-                        ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, 82);
-                        ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, 45);
-                        ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, 25);
+                        ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
+                        ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
+                        ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                        ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                        ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
                         ImGui.TableHeadersRow();
 
                         var sortedItems = _configuration.WithdrawItems
@@ -130,10 +128,7 @@ namespace FCCH.UI
                         var name = i.Name.ToString();
                         if (string.IsNullOrEmpty(name)) return false;
                         if (!name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)) return false;
-                        if (_alwaysIncludeNames.Contains(name)) return true;
-                        return !i.IsUntradable
-                            && i.RowId != 1
-                            && !(i.RowId >= 2 && i.RowId <= 19);
+                        return ItemListEligibility.IsAllowed(i);
                     }).Take(20);
 
                     if (filtered.Any())
@@ -184,11 +179,11 @@ namespace FCCH.UI
             ImGui.AlignTextToFramePadding();
             if (insufficient)
             {
-                ImGui.TextColored(ImGuiColors.DalamudOrange, itemName);
+                ItemNameDisplay.TextColored(item.ItemId, itemName, ImGuiColors.DalamudOrange, _configuration);
             }
             else
             {
-                ImGui.Text(itemName);
+                ItemNameDisplay.Text(item.ItemId, itemName, _configuration);
             }
 
             ImGui.TableNextColumn();
@@ -205,7 +200,7 @@ namespace FCCH.UI
             DrawModeButton(item);
 
             ImGui.TableNextColumn();
-            DrawMaxToggle(item);
+            DrawMaxToggle(item, index);
 
             ImGui.TableNextColumn();
             DrawDeleteButton(index);
@@ -235,8 +230,15 @@ namespace FCCH.UI
         {
             var text = item.Mode switch
             {
+                CustomItemMode.Deposit => FormatCount(inventoryHave),
+                CustomItemMode.Both => FormatSplitCount(chestHave, inventoryHave),
+                _ => FormatCount(chestHave)
+            };
+
+            var tooltip = item.Mode switch
+            {
                 CustomItemMode.Deposit => inventoryHave.ToString(),
-                CustomItemMode.Both => $"{chestHave}/{inventoryHave}",
+                CustomItemMode.Both => $"Chest: {chestHave}\nInventory: {inventoryHave}",
                 _ => chestHave.ToString()
             };
 
@@ -249,54 +251,35 @@ namespace FCCH.UI
                 ImGui.TextColored(ImGuiColors.HealerGreen, text);
             }
 
-            if (ImGui.IsItemHovered() && item.Mode == CustomItemMode.Both)
-                ImGui.SetTooltip("Chest / Inventory");
+            if (ImGui.IsItemHovered() && (item.Mode == CustomItemMode.Both || text != tooltip))
+                ImGui.SetTooltip(tooltip);
         }
 
         private void DrawModeButton(WithdrawItem item)
         {
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-            if (ImGui.Button(GetModeLabel(item.Mode), new Vector2(-1, 0)))
+            CellActionButton.DrawIcon(GetModeIcon(item.Mode), "mode", $"{GetModeLabel(item.Mode)}\nClick to cycle mode", () =>
             {
                 item.CycleMode();
                 _configuration.Save();
-            }
-            ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Click to cycle mode");
+            });
         }
 
-        private void DrawMaxToggle(WithdrawItem item)
+        private void DrawMaxToggle(WithdrawItem item, int index)
         {
-            var buttonColor = item.AlwaysMax
-                ? ImGuiColors.HealerGreen
-                : ImGui.GetStyle().Colors[(int)ImGuiCol.Button];
-
-            ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-            if (ImGui.Button("Max", new Vector2(-1, 0)))
+            CellActionButton.DrawText("M", $"max{index}", "Always use max available", () =>
             {
                 item.AlwaysMax = !item.AlwaysMax;
                 _configuration.Save();
-            }
-            ImGui.PopStyleColor(2);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Always use max available");
+            }, item.AlwaysMax);
         }
 
         private void DrawDeleteButton(int index)
         {
-            ImGui.PushFont(UiBuilder.IconFont);
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
-            bool clicked = ImGui.Button(FontAwesomeIcon.Minus.ToIconString());
-            ImGui.PopStyleColor(2);
-            ImGui.PopFont();
-
-            if (clicked)
+            CellActionButton.DrawIcon(FontAwesomeIcon.Minus, "delete", "Remove", () =>
             {
                 _configuration.WithdrawItems.RemoveAt(index);
                 _configuration.Save();
-            }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove");
+            }, true);
         }
 
         private bool IsInsufficient(WithdrawItem item, long chestHave, long inventoryHave)
@@ -319,6 +302,43 @@ namespace FCCH.UI
                 CustomItemMode.Both => "Both",
                 _ => "Withdraw"
             };
+        }
+
+        private static FontAwesomeIcon GetModeIcon(CustomItemMode mode)
+        {
+            return mode switch
+            {
+                CustomItemMode.Deposit => FontAwesomeIcon.ArrowDown,
+                CustomItemMode.Both => FontAwesomeIcon.ArrowsAltV,
+                _ => FontAwesomeIcon.ArrowUp
+            };
+        }
+
+        private static string FormatCount(long value)
+        {
+            if (value <= 99999999) return value.ToString();
+            if (value < 10000000) return $"{value / 1000000.0:0.#}m";
+            if (value < 1000000000) return $"{value / 1000000}m";
+            return $"{value / 1000000000.0:0.#}b";
+        }
+
+        private static string FormatSplitCount(long left, long right)
+        {
+            var leftText = left.ToString();
+            var rightText = right.ToString();
+            if (leftText.Length + rightText.Length <= 8)
+                return $"{leftText}/{rightText}";
+
+            return $"{FormatShortCount(left)}/{FormatShortCount(right)}";
+        }
+
+        private static string FormatShortCount(long value)
+        {
+            if (value < 1000) return value.ToString();
+            if (value < 1000000) return $"{value / 1000}k";
+            if (value < 10000000) return $"{value / 1000000.0:0.#}m";
+            if (value < 1000000000) return $"{value / 1000000}m";
+            return $"{value / 1000000000.0:0.#}b";
         }
 
         private void DrawPresets()

@@ -50,6 +50,7 @@ https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
 - **Pending-Command Timeout** - Cancels queued operations if the chest does not open within 15 seconds.
 - **Persisted Windows** - Settings and toolbar remember position; lock, snap-to-chest, and viewport clamp.
 - **Toolbar Dropdowns** - Deposit/Withdraw split-buttons expose tabs 1-5 inline.
+- **Compact Item Names** - Shortens supported materia, grade, and level item names in Custom, Ignore, and Organizer lists while keeping original names for sorting, searching, IPC, and chest operations.
 - **Diagnostics** - Collapsed troubleshooting area with debug mode, verbose logging, file logging, and internal diagnostic command references.
 
 ## Installation
@@ -81,21 +82,105 @@ https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
 
 ## IPC
 
-IPC calls are available for other plugins. Action calls return `true` when FCCH accepts the request.
+IPC calls are available for other plugins. Mutation calls return `true` when FCCH accepts and queues the request, `false` when the command gate refuses or arguments are invalid. The mutation return value is authoritative; `CanAcceptCommand()` and `GetBlockReason()` are advisory.
 
-| IPC | Description |
+### Contract version
+
+`FCCH.GetVersion()` returns the IPC contract version as an `int`. Current value: **`3`**. Bumped whenever any IPC signature, return contract, or documented behavior changes. Callers should branch on this value when integrating against multiple FCCH releases.
+
+### Readiness
+
+| IPC | Signature | Description |
+| :--- | :--- | :--- |
+| `FCCH.IsAvailable` | `bool IsAvailable()` | FCCH IPC is loaded |
+| `FCCH.IsBusy` | `bool IsBusy()` | FCCH is indexing or running an operation |
+| `FCCH.CanAcceptCommand` | `bool CanAcceptCommand()` | Advisory: the command gate is currently open |
+| `FCCH.GetBlockReason` | `string GetBlockReason()` | `""` when ready, otherwise a documented block-reason token (see enumeration below) |
+| `FCCH.GetVersion` | `int GetVersion()` | IPC contract version |
+
+#### Block-reason tokens
+
+`GetBlockReason()` is the canonical source. Returned value is never `null`. `GetBlockReason()` may return a non-empty token while `CanAcceptCommand()` returns `true`, specifically the `chest-closed` advisory state, where FCCH will accept a mutation and auto-open the chest. All other tokens correspond to `CanAcceptCommand() == false`.
+
+| Token | Meaning |
 | :--- | :--- |
-| `FCCH.IsAvailable()` | FCCH IPC is loaded |
-| `FCCH.IsBusy()` | FCCH is indexing or running an operation |
-| `FCCH.DepositAll()` | Deposit all allowed items |
-| `FCCH.DepositDuplicates()` | Deposit duplicate items |
-| `FCCH.DepositCustom()` | Deposit Custom List items |
-| `FCCH.WithdrawAll()` | Withdraw all allowed items |
-| `FCCH.WithdrawCustom()` | Withdraw Custom List items |
-| `FCCH.WithdrawWorkshop()` | Withdraw Workshop materials |
-| `FCCH.DepositGil(string amount)` | Deposit gil (`5000`, `5k`, `1m`, `all`) |
-| `FCCH.WithdrawGil(string amount)` | Withdraw gil (`5000`, `5k`, `1m`, `all`) |
-| `FCCH.Stop()` | Stop the active FCCH operation |
+| `""` (empty string) | Ready. Chest open, no operation in flight, plugin available. |
+| `"busy"` | An operation is in flight (indexing, moving, organizer job, or pending chest-open). `CanAcceptCommand()` is `false`. |
+| `"chest-closed"` | Plugin available and not busy, but the FC chest addon is not visible. FCCH will auto-open the chest on the next mutation IPC. `CanAcceptCommand()` is `true`. |
+| `"unavailable"` | Not logged in, no Free Company, or FC chest permissions denied. FCCH cannot operate. `CanAcceptCommand()` is `false`. |
+
+If a new token is added to this list in a future release, `GetVersion()` will be bumped so other plugins can detect the change.
+
+### Counts
+
+| IPC | Signature | Description |
+| :--- | :--- | :--- |
+| `FCCH.GetChestItemCount` | `long GetChestItemCount(uint itemId)` | Count cached matching items in the FC chest |
+| `FCCH.GetPlayerInventoryCount` | `long GetPlayerInventoryCount(uint itemId)` | Count matching items in player inventory |
+| `FCCH.GetWithdrawableItemCount` | `long GetWithdrawableItemCount(uint itemId)` | Count cached matching items FCCH can withdraw after permissions, ignore list, and leave-one rules |
+
+### Deposit
+
+| IPC | Signature | Description |
+| :--- | :--- | :--- |
+| `FCCH.DepositAll` | `bool DepositAll()` | Deposit all allowed items |
+| `FCCH.DepositCustom` | `bool DepositCustom()` | Deposit Custom List items |
+| `FCCH.DepositDuplicates` | `bool DepositDuplicates()` | Deposit duplicate items |
+| `FCCH.DepositGil` | `bool DepositGil(string amount)` | Deposit gil (`5000`, `5k`, `1m`, `all`) |
+| `FCCH.DepositItem` | `bool DepositItem(uint itemId, int quantity)` | Deposit up to `quantity` of one item |
+| `FCCH.DepositItems` | `bool DepositItems(Dictionary<uint, int> items)` | Deposit requested item quantities |
+
+### Withdraw
+
+| IPC | Signature | Description |
+| :--- | :--- | :--- |
+| `FCCH.WithdrawAll` | `bool WithdrawAll()` | Withdraw all allowed items |
+| `FCCH.WithdrawCustom` | `bool WithdrawCustom()` | Withdraw Custom List items |
+| `FCCH.WithdrawGil` | `bool WithdrawGil(string amount)` | Withdraw gil (`5000`, `5k`, `1m`, `all`) |
+| `FCCH.WithdrawItem` | `bool WithdrawItem(uint itemId, int quantity)` | Withdraw up to `quantity` of one item |
+| `FCCH.WithdrawItems` | `bool WithdrawItems(Dictionary<uint, int> items)` | Withdraw exactly `quantity` of each item |
+| `FCCH.WithdrawMissingItems` | `bool WithdrawMissingItems(Dictionary<uint, int> requiredTotals)` | Withdraw only the player's missing amount to reach each required total (top-up) |
+| `FCCH.WithdrawWorkshop` | `bool WithdrawWorkshop()` | Withdraw Workshop materials |
+
+### Control
+
+| IPC | Signature | Description |
+| :--- | :--- | :--- |
+| `FCCH.Stop` | `bool Stop()` | Stop the active FCCH operation |
+
+### Withdraw quantity semantics
+
+- `WithdrawItem(itemId, quantity)` and `WithdrawItems(items)` treat quantities as **exact requested withdrawal amounts**. Pulling 10 of an item moves 10 from the chest regardless of what the player already holds.
+- `WithdrawMissingItems(requiredTotals)` treats quantities as **required totals**. For each entry, FCCH subtracts the player's current inventory count and pulls only the missing amount. Already met totals are skipped.
+- All item transfer calls respect FC tab permissions, ignore settings, leave-one-per-stack, and available inventory or chest space.
+
+### Example: readiness pre-check
+
+```csharp
+var canAccept = plugin.GetIpcSubscriber<bool>("FCCH.CanAcceptCommand").InvokeFunc();
+if (!canAccept)
+{
+    var reason = plugin.GetIpcSubscriber<string>("FCCH.GetBlockReason").InvokeFunc();
+    // reason is "" when ready, "busy" when an operation is in flight.
+}
+
+var accepted = plugin.GetIpcSubscriber<bool>("FCCH.DepositAll").InvokeFunc();
+// accepted is authoritative. CanAcceptCommand() may return true and the mutation still refuse
+// if FCCH's state changed between the two calls.
+```
+
+### Example: top-up withdraw
+
+```csharp
+var required = new Dictionary<uint, int>
+{
+    [5106] = 999,
+    [5107] = 500,
+};
+var queued = plugin
+    .GetIpcSubscriber<Dictionary<uint, int>, bool>("FCCH.WithdrawMissingItems")
+    .InvokeFunc(required);
+```
 
 ### Diagnostics
 
@@ -107,3 +192,4 @@ The General settings tab includes a collapsed **Diagnostics** section for troubl
 | `/fcch gildebug` | Trace gil callbacks |
 | `/fcch accessprobe` | Dump live Company Chest addon permission state |
 | `/fcch fcperms [row]` | Dump raw FC rank permission bytes to plugin log |
+| `/fcch ipctest` | Exercise the FCCH IPC surface and report pass/fail to `/xllog` |

@@ -17,6 +17,18 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace FCCH.Managers
 {
+    public readonly struct ActionGateResult
+    {
+        public ActionGateResult(bool canRun, string reason)
+        {
+            CanRun = canRun;
+            Reason = reason;
+        }
+
+        public bool CanRun { get; }
+        public string Reason { get; }
+    }
+
     public unsafe class ChestHelper : IDisposable
     {
         private readonly Configuration _configuration;
@@ -30,15 +42,18 @@ namespace FCCH.Managers
         public Configuration Configuration => _configuration;
         public bool IsProcessing => MoveManager.IsProcessing || !_indexer.IsIdle;
         public bool IsUserOperationActive => MoveManager.IsProcessing;
+        public Func<bool>? ExternalOperationActive { get; set; }
         public List<Models.ShoppingItem> ShoppingList => _configuration.ShoppingItems;
         public bool IsSettingsVisible { get; set; } = false;
         public ItemFilter ItemFilter { get; private set; }
         public string LastError { get; private set; } = "";
 
         public bool IsChestFullyScanned => ChestManager.IsFullyScanned;
+        public event System.Action? CompanyChestClosedDuringOperation;
 
         private bool _wasProcessing = false;
         private bool _wasMoving = false;
+        private bool _wasChestOpen = false;
 
         private System.Action? _pendingCommand;
         private bool _isWaitingForIndex = false;
@@ -81,10 +96,21 @@ namespace FCCH.Managers
             var __perfStart = System.Diagnostics.Stopwatch.GetTimestamp();
             try
             {
+            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            var isChestOpen = addon != null && addon->IsVisible;
+
+            if (_wasChestOpen && !isChestOpen && HasAbortableWork())
+            {
+                AbortForClosedChest();
+                _wasChestOpen = false;
+                return;
+            }
+
+            _wasChestOpen = isChestOpen;
+
             MoveManager.Update();
             
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
-            if (addon != null && addon->IsVisible)
+            if (isChestOpen)
             {
                  var currentPage = ChestManager.GetCurrentFCPage(addon);
                  if (currentPage != InventoryType.Invalid)
@@ -178,8 +204,39 @@ namespace FCCH.Managers
             }
         }
 
+        private bool HasAbortableWork()
+        {
+            return MoveManager.IsProcessing ||
+                   !_indexer.IsIdle ||
+                   _pendingCommand != null ||
+                   ExternalOperationActive?.Invoke() == true;
+        }
+
+        private void AbortForClosedChest()
+        {
+            MoveManager.Clear();
+            MoveManager.SuppressCompletionSound = false;
+            _indexer.Stop();
+            _pendingCommand = null;
+            _isWaitingForIndex = false;
+            _pendingCommandQueuedAtUtc = DateTime.MinValue;
+            _indexingCompleteTime = DateTime.MinValue;
+            _wasProcessing = false;
+            _wasMoving = false;
+            CompanyChestClosedDuringOperation?.Invoke();
+            ChatHelper.Warning("FCCH stopped because the company chest was closed.");
+            DebugLog("[Safety] Aborted active FCCH work because the company chest closed.");
+        }
+
         public void ProcessCommand(System.Action command)
         {
+            var gate = CanAcceptCommand();
+            if (!gate.CanRun)
+            {
+                ChatHelper.Warning(gate.Reason);
+                return;
+            }
+
             var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
             if (addon != null && addon->IsVisible)
             {
@@ -193,6 +250,67 @@ namespace FCCH.Managers
                 InteractWithChest();
             }
         }
+
+        public ActionGateResult CanStartUserAction()
+        {
+            if (IsUnavailable()) return Blocked("FCCH cannot operate: not logged in or no Free Company.");
+            if (_pendingCommand != null) return Blocked("FCCH is waiting for the company chest to finish opening.");
+            if (ExternalOperationActive?.Invoke() == true) return Blocked("FCCH is running an organizer job.");
+            if (MoveManager.IsProcessing) return Blocked("FCCH is moving items.");
+            if (_isWaitingForIndex || !_indexer.IsIdle) return Blocked("FCCH is scanning the company chest.");
+            return new ActionGateResult(true, "");
+        }
+
+        public bool IsUnavailable()
+        {
+            try
+            {
+                if (Plugin.ClientState == null || !Plugin.ClientState.IsLoggedIn) return true;
+                if (ChestManager.GetFCRank() == 0) return true;
+                return false;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        public bool IsChestAddonVisible()
+        {
+            try
+            {
+                var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+                return addon != null && addon->IsVisible;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public bool HasPendingCommand => _pendingCommand != null;
+
+        public ActionGateResult CanAcceptCommand()
+        {
+            var gate = CanStartUserAction();
+            if (!gate.CanRun) return gate;
+            return new ActionGateResult(true, "");
+        }
+
+        public bool TryStartUserAction(System.Action action)
+        {
+            var gate = CanStartUserAction();
+            if (!gate.CanRun)
+            {
+                ChatHelper.Warning(gate.Reason);
+                return false;
+            }
+
+            action();
+            return true;
+        }
+
+        private static ActionGateResult Blocked(string reason) => new(false, reason);
 
         private void CancelPendingCommand(string userMessage)
         {
@@ -308,6 +426,16 @@ namespace FCCH.Managers
                 .Sum(x => (long)x.Quantity);
         }
 
+        public long GetWithdrawableItemCountInChest(uint itemId)
+        {
+            var withdrawable = new HashSet<InventoryType>(ChestManager.GetWithdrawableTabs());
+            return ChestManager.CachedItems
+                .Where(x => x.ItemId == itemId)
+                .Where(x => withdrawable.Contains(x.Page))
+                .Where(x => !_configuration.IgnoreList.Any(i => i.ItemId == itemId && i.IgnoreWithdraw))
+                .Sum(x => _configuration.LeaveOneItemPerStack && x.Quantity > 0 ? (long)x.Quantity - 1 : x.Quantity);
+        }
+
         public string GetItemName(uint itemId)
         {
             try
@@ -321,6 +449,19 @@ namespace FCCH.Managers
         }
         
         public void WithdrawMaterials(Dictionary<uint, int> items) => _commandHandler.WithdrawMaterials(items);
+        public void DepositMaterials(Dictionary<uint, int> items) => _commandHandler.DepositMaterials(items);
+        public void WithdrawMissingMaterials(Dictionary<uint, int> requiredTotals)
+        {
+            var missing = new Dictionary<uint, int>();
+            foreach (var (itemId, required) in requiredTotals)
+            {
+                var amount = required - GetItemCountInPlayerInventory(itemId);
+                if (amount <= 0) continue;
+                missing[itemId] = amount > int.MaxValue ? int.MaxValue : (int)amount;
+            }
+
+            _commandHandler.WithdrawMaterials(missing);
+        }
         
         private bool CanDeposit(InventoryType page)
         {

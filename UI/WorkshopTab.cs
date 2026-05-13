@@ -251,15 +251,20 @@ namespace FCCH.UI
             }
 
             ImGui.SameLine();
+            var gate = _helper.CanStartUserAction();
+            if (!gate.CanRun) ImGui.BeginDisabled();
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Refresh", new Vector2(refreshWidth, 0)))
             {
                 TryRefreshChestData();
             }
             ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered())
+            if (!gate.CanRun) ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             {
-                ImGui.SetTooltip(IsChestAddonVisible()
+                ImGui.SetTooltip(!gate.CanRun
+                    ? gate.Reason
+                    : IsChestAddonVisible()
                     ? "Refresh Chest Data"
                     : "Refresh Chest Data\nOpen the Company Chest to update.");
             }
@@ -292,7 +297,7 @@ namespace FCCH.UI
 
         private void TryRefreshChestData()
         {
-            if (_helper.IsUserOperationActive) return;
+            if (!_helper.CanStartUserAction().CanRun) return;
             if (!IsChestAddonVisible()) return;
             _helper.StartIndexing(false);
         }
@@ -362,8 +367,8 @@ namespace FCCH.UI
                 ImGui.TableSetupColumn("Project", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, 50);
                 ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 50);
-                ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, 30);
-                ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, 22);
+                ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
 
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
@@ -394,34 +399,17 @@ namespace FCCH.UI
                     ImGui.TextColored(ImGuiColors.DalamudOrange, $"{readyCount}/{totalCount}");
 
                 ImGui.TableNextColumn();
-                float maxBtnWidth = ImGui.CalcTextSize("M").X + ImGui.GetStyle().FramePadding.X * 2;
-                float maxColWidth = ImGui.GetContentRegionAvail().X;
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (maxColWidth - maxBtnWidth) * 0.5f);
-                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-                if (ImGui.SmallButton($"M##{index}"))
+                CellActionButton.DrawText("M", $"max{index}", "Max craftable", () =>
                 {
                     item.Quantity = CalculateMaxCraft(item.Craft);
-                }
-                ImGui.PopStyleColor();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Max craftable");
+                });
 
                 ImGui.TableNextColumn();
-                ImGui.PushFont(UiBuilder.IconFont);
-                float delBtnWidth = ImGui.CalcTextSize(FontAwesomeIcon.Minus.ToIconString()).X + ImGui.GetStyle().FramePadding.X * 2;
-                ImGui.PopFont();
-                float delColWidth = ImGui.GetContentRegionAvail().X;
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (delColWidth - delBtnWidth) * 0.5f);
-                ImGui.PushFont(UiBuilder.IconFont);
-                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
-                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
-                if (ImGui.SmallButton($"{FontAwesomeIcon.Minus.ToIconString()}##{index}"))
+                CellActionButton.DrawIcon(FontAwesomeIcon.Minus, $"delete{index}", "Remove", () =>
                 {
                     _helper.ShoppingList.RemoveAt(index);
                     _expandedProjects.Remove(index);
-                }
-                ImGui.PopStyleColor(2);
-                ImGui.PopFont();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove");
+                }, true);
 
                 ImGui.EndTable();
             }

@@ -121,7 +121,7 @@ namespace FCCH.Managers
 
         public void DepositToTab(int tab)
         {
-            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1–5."); return; }
+            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
             if (!_chestManager.GetAvailableTabs().Contains(target))
@@ -148,7 +148,7 @@ namespace FCCH.Managers
             }
 
             if (OperationManager.LastDepositOverflow.Count > 0)
-                ChatHelper.Warning($"{OperationManager.LastDepositOverflow.Count} item(s) skipped — Tab {tab} full.");
+                ChatHelper.Warning($"{OperationManager.LastDepositOverflow.Count} item(s) skipped - Tab {tab} full.");
 
             if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for deposit to Tab {tab}.");
             else ChatHelper.Info($"No items to deposit to Tab {tab}.");
@@ -174,7 +174,7 @@ namespace FCCH.Managers
 
         public void WithdrawFromTab(int tab)
         {
-            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1–5."); return; }
+            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
             if (!_chestManager.GetAvailableTabs().Contains(target))
@@ -231,6 +231,28 @@ namespace FCCH.Managers
 
             if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for workshop withdrawal.");
             else ChatHelper.Info("No materials found to withdraw.");
+        }
+
+        public void DepositMaterials(Dictionary<uint, int> items)
+        {
+            _moveManager.Clear();
+            _chestManager.ScanFCChest();
+
+            if (items.Count == 0)
+            {
+                ChatHelper.Info("Deposit request is empty.");
+                return;
+            }
+
+            var moves = OperationManager.CalculateDepositMoves(_chestManager, _configuration, PlayerInvTypes, items);
+
+            foreach (var move in moves)
+            {
+                _moveManager.Enqueue(move);
+            }
+
+            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} requested items for deposit.");
+            else ChatHelper.Info("No requested items to deposit.");
         }
 
         public void DepositCustomItems()

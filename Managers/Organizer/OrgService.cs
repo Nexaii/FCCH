@@ -85,6 +85,13 @@ namespace FCCH.Managers.Organizer
             _executor.Cancel();
         }
 
+        public void AbortForClosedChest()
+        {
+            DebugLog("Job aborted because chest closed");
+            _executor.Cancel();
+            LastCheck = null;
+        }
+
         public void Update()
         {
             _executor.Update();

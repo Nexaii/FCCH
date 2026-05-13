@@ -31,6 +31,7 @@ namespace FCCH
         [PluginService] public static ISigScanner SigScanner { get; private set; } = null!;
         [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
         [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
+        [PluginService] public static IContextMenu ContextMenu { get; private set; } = null!;
 
         private ChestHelper ChestHelper { get; init; }
         private OverlayManager OverlayManager { get; init; }
@@ -39,11 +40,14 @@ namespace FCCH
         private Dalamud.Interface.Windowing.WindowSystem WindowSystem { get; init; }
         private OpLockManager OpLockManager { get; init; }
         private GilManager GilManager { get; init; }
+        /// <summary>Owned by Plugin. UI consumers borrow a non-owning reference and must not dispose.</summary>
         private OrgService OrgService { get; init; }
+        private ItemContextMenuManager ItemContextMenuManager { get; init; }
         private Common.WorkshoppaIPC WorkshoppaIpc { get; init; }
         private Common.FCCHIpc FcchIpc { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
+        private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, all\n- Info: info";
 
         public Plugin()
         {
@@ -61,6 +65,9 @@ namespace FCCH
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
 
             OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
+            ChestHelper.ExternalOperationActive = () => OrgService.JobStatus == OrgJobStatus.Running;
+            ChestHelper.CompanyChestClosedDuringOperation += OnCompanyChestClosedDuringOperation;
+            ItemContextMenuManager = new ItemContextMenuManager(ContextMenu, Configuration);
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
 
@@ -70,7 +77,7 @@ namespace FCCH
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
-                HelpMessage = "Opens settings.\n— Deposit: da (All) | da1..da5 (Tab N) | dd (Dupes) | dc (Crystals)\n— Withdraw: wa (All) | wa1..wa5 (Tab N) | ws (Custom) | wp (Workshop) | wc (Crystals)\n— Gil: gd (Deposit) | gw (Withdraw) — e.g. 5k, 1m, all\n— Info: info"
+                HelpMessage = CommandHelpMessage
             });
 
             PluginInterface.UiBuilder.Draw += DrawUI;
@@ -82,6 +89,12 @@ namespace FCCH
 
         private bool _wasSettingsOpen = false;
         private bool _wasChestOpen = false;
+
+        private void OnCompanyChestClosedDuringOperation()
+        {
+            OrgService.AbortForClosedChest();
+            GilManager.CancelPendingTransaction();
+        }
 
         private unsafe void OnUpdate(IFramework framework)
         {
@@ -160,6 +173,9 @@ namespace FCCH
                 case "wp":
                     ChestHelper.ProcessCommand(() => ChestHelper.WithdrawWorkshopItems());
                     break;
+                case "help":
+                    ChatHelper.Info(CommandHelpMessage);
+                    break;
 
                 case "info":
                     ChestHelper.ProcessCommand(() =>
@@ -209,13 +225,16 @@ namespace FCCH
                 case "aprobe":
                     ChatHelper.Info(ChestHelper.DumpAccessProbe());
                     break;
+                case "ipctest":
+                    new Common.FCCHIpcSelfTest(PluginInterface).Run();
+                    break;
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();
                     ChatHelper.Info($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
                 default:
-                    ChatHelper.Info("Unknown command. Available: da, da1..da5, dd, ds, dc, wa, wa1..wa5, ws, wp, wc, gd, gw, info");
+                    ChatHelper.Info($"Unknown FCCH command: {subCommand}. Use /fcch help.");
                     break;
             }
         }
@@ -237,21 +256,28 @@ namespace FCCH
 
         public void Dispose()
         {
-            FcchIpc?.Dispose();
-            GilManager?.Dispose();
-            OpLockManager?.Dispose();
-            OrgService?.Dispose();
-
             CommandManager.RemoveHandler("/fcch");
             PluginInterface.UiBuilder.Draw -= DrawUI;
             PluginInterface.UiBuilder.OpenConfigUi -= DrawConfig;
             PluginInterface.UiBuilder.OpenMainUi -= DrawMain;
             Framework.Update -= OnUpdate;
 
-            WindowSystem?.RemoveAllWindows();
+            try { ChestHelper?.Stop(); } catch (System.Exception e) { try { PluginLog.Error(e, "[FCCH] ChestHelper.Stop during dispose threw."); } catch { } }
+
+            if (ChestHelper != null)
+                ChestHelper.CompanyChestClosedDuringOperation -= OnCompanyChestClosedDuringOperation;
+
+            OpLockManager?.Dispose();
+            FcchIpc?.Dispose();
+
+            ItemContextMenuManager?.Dispose();
             OverlayManager?.Dispose();
             SettingsWindow?.Dispose();
+            OrgService?.Dispose();
+            GilManager?.Dispose();
             ChestHelper?.Dispose();
+
+            WindowSystem?.RemoveAllWindows();
             Common.DebugFileLogger.DrainAndShutdown();
         }
     }

@@ -159,9 +159,7 @@ namespace FCCH.Managers
                     bool isHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality;
                     uint srcSlot = (uint)i;
 
-                    uint sourceQty = (uint)item->Quantity;
                     uint requestedFromSlot = remainingToDeposit;
-                    int firstMoveIndex = moves.Count;
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
                         ? stacks.Where(x => x.Quantity < x.MaxStack && allowedTabSet.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
@@ -225,13 +223,6 @@ namespace FCCH.Managers
                         stacksByItemId[newSlot.ItemId].Add(newSlot);
 
                         remainingToDeposit -= transfer;
-                    }
-
-                    if (moves.Count - firstMoveIndex == 1 && moves[firstMoveIndex].Amount == sourceQty)
-                    {
-                        var single = moves[firstMoveIndex];
-                        single.IsNativeMove = false;
-                        moves[firstMoveIndex] = single;
                     }
 
                     if (remainingLimits != null)
@@ -307,8 +298,6 @@ namespace FCCH.Managers
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
                     uint srcSlot = (uint)i;
-                    uint sourceQty = (uint)item->Quantity;
-                    int firstMoveIndex = moves.Count;
 
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
                         ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
@@ -392,12 +381,6 @@ namespace FCCH.Managers
                         }
                     }
 
-                    if (moves.Count - firstMoveIndex == 1 && moves[firstMoveIndex].Amount == sourceQty)
-                    {
-                        var single = moves[firstMoveIndex];
-                        single.IsNativeMove = false;
-                        moves[firstMoveIndex] = single;
-                    }
                 }
             }
 
@@ -464,9 +447,6 @@ namespace FCCH.Managers
                     }
 
                     uint remainingFromThisSlot = (uint)Math.Min(amountNeeded, (int)availableFromSlot);
-                    int firstMoveIndex = moves.Count;
-                    uint intendedTotal = remainingFromThisSlot;
-
                     if (config.DebugMode)
                     {
                         Plugin.PluginLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
@@ -498,15 +478,6 @@ namespace FCCH.Managers
 
                         remainingFromThisSlot -= transfer;
                         amountNeeded -= (int)transfer;
-                    }
-
-                    if (moves.Count - firstMoveIndex == 1
-                        && moves[firstMoveIndex].Amount == chestSlot.Quantity
-                        && intendedTotal == chestSlot.Quantity)
-                    {
-                        var single = moves[firstMoveIndex];
-                        single.IsNativeMove = false;
-                        moves[firstMoveIndex] = single;
                     }
 
                     if (remainingFromThisSlot > 0)

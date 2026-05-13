@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FCCH.Models;
 using FCCH.Common;
@@ -37,16 +36,11 @@ namespace FCCH.Managers
         private InventoryManagerMoveItemDelegate? _invManagerMoveItem;
         private const string InvManagerMoveItemSig = "48 89 5C 24 10 48 89 6C 24 18 56 57 41 55 41 56 41 57 48 83 EC 30 8D BA 60 F0 FF FF 45 0F BF E8 8D 82 FC EF FF FF 41 8B E9 44 8B FA 4C 8B F1";
 
-        private delegate nint AgentMoveItemDelegate(void* agent, InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot);
-        private AgentMoveItemDelegate? _agentMoveItem;
-        private const string AgentMoveItemSig = "40 53 55 56 57 41 57 48 83 EC ?? 45 33 FF";
-
         public MoveManager(Configuration config, ChestManager chestManager)
         {
             _configuration = config;
             _chestManager = chestManager;
             ResolveInvManagerMoveItem();
-            ResolveAgentMoveItem();
         }
 
         private void ResolveInvManagerMoveItem()
@@ -66,26 +60,6 @@ namespace FCCH.Managers
             catch (Exception ex)
             {
                 Plugin.PluginLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
-            }
-        }
-
-        private void ResolveAgentMoveItem()
-        {
-            try
-            {
-                if (Plugin.SigScanner.TryScanText(AgentMoveItemSig, out var ptr))
-                {
-                    _agentMoveItem = Marshal.GetDelegateForFunctionPointer<AgentMoveItemDelegate>(ptr);
-                    Plugin.PluginLog.Info($"[MoveManager] Agent MoveItem resolved at 0x{ptr:X16}");
-                }
-                else
-                {
-                    Plugin.PluginLog.Warning("[MoveManager] Agent MoveItem signature mismatch — full-stack moves will fall back to native partial path.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Plugin.PluginLog.Error(ex, "[MoveManager] Failed to resolve Agent MoveItem.");
             }
         }
 
@@ -185,47 +159,22 @@ namespace FCCH.Managers
                 }
 
                 _lastDispatchUtc = DateTime.UtcNow;
-                bool dispatched = false;
 
-                if (op.IsNativeMove && _invManagerMoveItem != null)
+                if (!DispatchMove(invManager, op))
                 {
-                    int rc = _invManagerMoveItem(invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, (int)op.Amount);
-                    DebugLog($"[Move/InvMgr] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) rc={rc}");
-                    dispatched = true;
-                }
-                else if (op.IsNativeMove && _invManagerMoveItem == null)
-                {
-                    Plugin.PluginLog.Error($"[Move] Native delegate missing — refusing to fake partial move for Item#{op.ItemId} (would break Leave-1).");
                     EmitBatchSummaryIfDrained();
                     return;
                 }
-                else if (_agentMoveItem != null && (IsFCPage(op.SrcInv) || IsFCPage(op.DstInv)))
-                {
-                    var agentModule = UIModule.Instance()->GetAgentModule();
-                    if (agentModule == null) { DebugLog("[Error] AgentModule null"); EmitBatchSummaryIfDrained(); return; }
-                    var agent = agentModule->GetAgentByInternalId(AgentId.FreeCompanyChest);
-                    if (agent == null) { DebugLog("[Error] FC Chest Agent null"); EmitBatchSummaryIfDrained(); return; }
-                    _agentMoveItem(agent, op.SrcInv, op.SrcSlot, op.DstInv, op.DstSlot);
-                    DebugLog($"[Move/Agent] full-stack Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
-                    dispatched = true;
-                }
-                else
-                {
-                    invManager->MoveItemSlot(op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, true);
-                    DebugLog($"[Move/Slot-Fallback] Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
-                    dispatched = true;
-                }
 
-                if (dispatched && RefusalWatcher != null && RefusalWatcher.ConsumeRefusalSince(_lastDispatchUtc))
+                if (RefusalWatcher != null && RefusalWatcher.ConsumeRefusalSince(_lastDispatchUtc))
                 {
                     DebugLog($"[Move/Refused] LogMessage#{RefusalWatcher.LastRefusalLogId} on {guardTab}");
                     NoteRefusal(guardTab);
                 }
-                else if (dispatched)
+                else
                 {
                     NoteSuccess(guardTab);
                 }
-
                 LastActionTime = DateTime.Now;
                 ProcessedThisFrame = true;
                 EmitBatchSummaryIfDrained();
@@ -237,7 +186,27 @@ namespace FCCH.Managers
                 EmitBatchSummaryIfDrained();
             }
         }
-        
+
+        private bool DispatchMove(InventoryManager* invManager, MoveOperation op)
+        {
+            if (_invManagerMoveItem != null)
+            {
+                int rc = _invManagerMoveItem(invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, (int)op.Amount);
+                DebugLog($"[Move/InvMgr] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) rc={rc}");
+                return true;
+            }
+
+            if (op.IsNativeMove)
+            {
+                Plugin.PluginLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
+                return false;
+            }
+
+            invManager->MoveItemSlot(op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, true);
+            DebugLog($"[Move/Slot-Fallback] Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
+            return true;
+        }
+
         private bool IsFCPage(InventoryType type)
         {
             return type == InventoryType.FreeCompanyPage1 ||
@@ -357,7 +326,6 @@ namespace FCCH.Managers
             TotalQueued = 0;
             CompletedCount = 0;
             _invManagerMoveItem = null;
-            _agentMoveItem = null;
         }
     }
 }

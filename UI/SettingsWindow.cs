@@ -56,8 +56,8 @@ namespace FCCH.UI
             _ignoreTab = new IgnoreTab(helper, configuration);
             _customTab = new CustomTab(helper, configuration);
             _workshopTab = new WorkshopTab(helper, configuration, cache, workshoppaIpc);
-            _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr);
-            _organizerTab = new OrganizerTab(orgService, configuration);
+            _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr, helper);
+            _organizerTab = new OrganizerTab(orgService, configuration, helper);
 
             _kofiButton = new TitleBarButton
             {
