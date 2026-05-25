@@ -7,6 +7,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
 using FCCH.GameData;
+using FCCH.IPC;
 using FCCH.UI;
 using FCCH.Managers;
 using FCCH.Managers.Organizer;
@@ -35,7 +36,7 @@ namespace FCCH.UI
         private readonly TitleBarButton _settingsSnapButton;
         private bool _snapPending;
 
-        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, Common.WorkshoppaIPC workshoppaIpc)
+        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, WorkshoppaIPC workshoppaIPC)
             : base("FCCH Settings###SettingsWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
         {
             _helper = helper;
@@ -55,7 +56,7 @@ namespace FCCH.UI
             _generalTab = new GeneralTab(configuration, _fileDialogManager);
             _ignoreTab = new IgnoreTab(helper, configuration);
             _customTab = new CustomTab(helper, configuration);
-            _workshopTab = new WorkshopTab(helper, configuration, cache, workshoppaIpc);
+            _workshopTab = new WorkshopTab(helper, configuration, cache, workshoppaIPC);
             _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr, helper);
             _organizerTab = new OrganizerTab(orgService, configuration, helper);
 

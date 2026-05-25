@@ -472,7 +472,7 @@ namespace FCCH.UI
         private void DebugLog(string msg)
         {
             if (!_config.DebugMode) return;
-            Plugin.PluginLog.Info($"[OrganizerTab] {msg}");
+            FCCH.Common.FCCHLog.Info($"[OrganizerTab] {msg}");
             ChatHelper.Debug($"[OrgTab] {msg}");
         }
 

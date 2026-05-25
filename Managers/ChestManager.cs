@@ -33,7 +33,7 @@ namespace FCCH.Managers
 
             if (targetIndex == -1)
             {
-                Plugin.PluginLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
+                FCCH.Common.FCCHLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
                 return;
             }
 
@@ -297,20 +297,20 @@ namespace FCCH.Managers
             try
             {
                 var uiModule = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
-                if (uiModule == null) { Plugin.PluginLog.Warning("[FCPerms] UIModule null."); return; }
+                if (uiModule == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] UIModule null."); return; }
 
                 var infoModule = uiModule->GetInfoModule();
-                if (infoModule == null) { Plugin.PluginLog.Warning("[FCPerms] InfoModule null."); return; }
+                if (infoModule == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] InfoModule null."); return; }
 
                 var fcProxy = (InfoProxyFreeCompany*)infoModule->GetInfoProxyById(InfoProxyId.FreeCompany);
-                if (fcProxy == null) { Plugin.PluginLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
+                if (fcProxy == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
 
                 byte playerRank = fcProxy->Rank;
-                Plugin.PluginLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
+                FCCH.Common.FCCHLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
 
                 if (overrideRank.HasValue)
                 {
-                    if (overrideRank.Value >= 14) { Plugin.PluginLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
+                    if (overrideRank.Value >= 14) { FCCH.Common.FCCHLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
                     DumpRankRow(fcProxy, overrideRank.Value, playerRank);
                     return;
                 }
@@ -319,7 +319,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[FCPerms] Dump failed.");
+                FCCH.Common.FCCHLog.Error(ex, "[FCPerms] Dump failed.");
             }
         }
 
@@ -329,7 +329,7 @@ namespace FCCH.Managers
             if (addon == null || !addon->IsVisible)
             {
                 const string closed = "[AccessProbe] Company Chest addon is not open.";
-                Plugin.PluginLog.Info(closed);
+                FCCH.Common.FCCHLog.Info(closed);
                 return closed;
             }
 
@@ -352,7 +352,7 @@ namespace FCCH.Managers
             uint tab5 = (packedItems >> 8) & 3;
 
             string message = $"[AccessProbe] mode={mode} selectedTab={selectedTab} page={page} packedItems=0x{packedItems:X8} tabs=[1:{tab1},2:{tab2},3:{tab3},4:{tab4},5:{tab5}] crystal={crystal} gil={gil} action={action} visibleMode={visibleMode} visibleMask=0x{visibleMask:X8} limitedMaskMode={limitedMaskMode}";
-            Plugin.PluginLog.Info(message);
+            FCCH.Common.FCCHLog.Info(message);
             if (_configuration.DebugMode)
                 DebugFileLogger.Enqueue(_configuration.DebugLogPath, message);
             return message;
@@ -366,7 +366,7 @@ namespace FCCH.Managers
             var hex = new System.Text.StringBuilder();
             for (int i = 0; i < 10; i++) hex.Append($" {(byte)p[i]:X2}");
 
-            Plugin.PluginLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
+            FCCH.Common.FCCHLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
 
             byte d1 = DecodeChestAccess(p, InventoryType.FreeCompanyPage1);
             byte d2 = DecodeChestAccess(p, InventoryType.FreeCompanyPage2);
@@ -376,8 +376,8 @@ namespace FCCH.Managers
             byte dc = DecodeChestAccess(p, InventoryType.FreeCompanyCrystals);
             byte dg = DecodeChestAccess(p, InventoryType.FreeCompanyGil);
 
-            Plugin.PluginLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
-            Plugin.PluginLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
+            FCCH.Common.FCCHLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
+            FCCH.Common.FCCHLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
         }
 
         public static string NameAccess(byte v) => v switch

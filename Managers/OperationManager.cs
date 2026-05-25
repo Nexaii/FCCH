@@ -449,7 +449,7 @@ namespace FCCH.Managers
                     uint remainingFromThisSlot = (uint)Math.Min(amountNeeded, (int)availableFromSlot);
                     if (config.DebugMode)
                     {
-                        Plugin.PluginLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
+                        FCCH.Common.FCCHLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
                     }
 
                     while (remainingFromThisSlot > 0)
@@ -494,7 +494,7 @@ namespace FCCH.Managers
                 {
                     int overflow = amountNeeded > 0 ? amountNeeded : 0;
                     int queued = totalRequested - overflow;
-                    Plugin.PluginLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
+                    FCCH.Common.FCCHLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
                 }
             }
 

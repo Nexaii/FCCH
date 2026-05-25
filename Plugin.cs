@@ -5,6 +5,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
+using FCCH.IPC;
 using FCCH.Managers;
 using FCCH.UI;
 using FCCH.GameData;
@@ -42,9 +43,9 @@ namespace FCCH
         private GilManager GilManager { get; init; }
         /// <summary>Owned by Plugin. UI consumers borrow a non-owning reference and must not dispose.</summary>
         private OrgService OrgService { get; init; }
-        private ItemContextMenuManager ItemContextMenuManager { get; init; }
-        private Common.WorkshoppaIPC WorkshoppaIpc { get; init; }
-        private Common.FCCHIpc FcchIpc { get; init; }
+        private ContextMenu ItemContextMenu { get; init; }
+        private WorkshoppaIPC WorkshoppaIPC { get; init; }
+        private IPCProvider IPC { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
         private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, all\n- Info: info";
@@ -56,22 +57,22 @@ namespace FCCH
 
             WorkshopCache = new WorkshopCache(Data, PluginLog);
             ChestHelper = new ChestHelper(Configuration);
-            WorkshoppaIpc = new Common.WorkshoppaIPC(PluginInterface);
-            
+            WorkshoppaIPC = new WorkshoppaIPC(PluginInterface);
+
             OpLockManager = new OpLockManager(Configuration);
             GilManager = new GilManager(Configuration, ChestHelper.ChestManager, ChestHelper.MoveManager);
-            FcchIpc = new Common.FCCHIpc(PluginInterface, ChestHelper, GilManager);
+            IPC = new IPCProvider(PluginInterface, ChestHelper, GilManager);
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
 
             OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
             ChestHelper.ExternalOperationActive = () => OrgService.JobStatus == OrgJobStatus.Running;
             ChestHelper.CompanyChestClosedDuringOperation += OnCompanyChestClosedDuringOperation;
-            ItemContextMenuManager = new ItemContextMenuManager(ContextMenu, Configuration);
+            ItemContextMenu = new ContextMenu(Plugin.ContextMenu, Configuration);
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
 
-            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIpc);
+            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIPC);
             
             WindowSystem.AddWindow(SettingsWindow);
             
@@ -225,9 +226,6 @@ namespace FCCH
                 case "aprobe":
                     ChatHelper.Info(ChestHelper.DumpAccessProbe());
                     break;
-                case "ipctest":
-                    new Common.FCCHIpcSelfTest(PluginInterface).Run();
-                    break;
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();
@@ -268,9 +266,9 @@ namespace FCCH
                 ChestHelper.CompanyChestClosedDuringOperation -= OnCompanyChestClosedDuringOperation;
 
             OpLockManager?.Dispose();
-            FcchIpc?.Dispose();
+            IPC?.Dispose();
 
-            ItemContextMenuManager?.Dispose();
+            ItemContextMenu?.Dispose();
             OverlayManager?.Dispose();
             SettingsWindow?.Dispose();
             OrgService?.Dispose();

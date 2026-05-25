@@ -30,7 +30,7 @@ namespace FCCH.GameData
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
+                FCCH.Common.FCCHLog.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
             }
             return DefaultMaxStack;
         }

@@ -71,7 +71,7 @@ namespace FCCH.Common
                 _windowStartUtc = now;
             }
 
-            try { Plugin.PluginLog.Info(line); } catch { }
+            try { FCCH.Common.FCCHLog.Info(line); } catch { }
         }
 
         private static bool IsEnabled()

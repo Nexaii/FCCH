@@ -237,7 +237,7 @@ namespace FCCH.UI
                     DrawSettingRow("Custom Debug Path", () =>
                     {
                         string logPath = _configuration.DebugLogPath;
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 35);
+                        ImGui.SetNextItemWidth(220f);
                         if (ImGui.InputTextWithHint("##logPath", "Default: FCCH_Debug.log", ref logPath, 256))
                         {
                             _configuration.DebugLogPath = logPath;

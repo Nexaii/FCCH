@@ -8,12 +8,12 @@ using Lumina.Excel.Sheets;
 
 namespace FCCH.Managers
 {
-    internal sealed class ItemContextMenuManager : IDisposable
+    internal sealed class ContextMenu : IDisposable
     {
         private readonly IContextMenu contextMenu;
         private readonly Configuration configuration;
 
-        public ItemContextMenuManager(IContextMenu contextMenu, Configuration configuration)
+        public ContextMenu(IContextMenu contextMenu, Configuration configuration)
         {
             this.contextMenu = contextMenu;
             this.configuration = configuration;

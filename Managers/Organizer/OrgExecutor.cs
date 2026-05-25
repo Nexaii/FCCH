@@ -68,7 +68,7 @@ namespace FCCH.Managers.Organizer
         private void DebugLog(string msg)
         {
             if (!_config.DebugMode) return;
-            Plugin.PluginLog.Info($"[OrgExecutor] {msg}");
+            FCCH.Common.FCCHLog.Info($"[OrgExecutor] {msg}");
             ChatHelper.Debug($"[OrgExec] {msg}");
         }
 

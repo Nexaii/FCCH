@@ -44,7 +44,7 @@ namespace FCCH.Managers
             }
             else
             {
-                Plugin.PluginLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
+                FCCH.Common.FCCHLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
                 DebugLog("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
             }
         }
@@ -74,7 +74,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                Plugin.PluginLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
+                FCCH.Common.FCCHLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
             }
 
             _fcBitsetHook!.Original(state, byteIndex, newByte);
@@ -107,7 +107,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                Plugin.PluginLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
+                FCCH.Common.FCCHLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
             }
         }
 
@@ -166,7 +166,7 @@ namespace FCCH.Managers
         private void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            Plugin.PluginLog.Info(msg);
+            FCCH.Common.FCCHLog.Info(msg);
             Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
         }
     }

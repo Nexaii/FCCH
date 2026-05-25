@@ -55,7 +55,7 @@ namespace FCCH
         public string CustomSoundPath { get; set; } = "";
 
         public int MoveDelayInMs { get; set; } = 700;
-        public int IndexingDelayInMs { get; set; } = 150;
+        public int IndexingDelayInMs { get; set; } = 100;
         public int WithdrawDelayInMs { get; set; } = 700;
         public double IndexingTimeoutSeconds { get; set; } = 3.0;
 

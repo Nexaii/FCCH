@@ -7,10 +7,7 @@ using Lumina.Excel.Sheets;
 
 namespace FCCH.Common
 {
-    // Primary permission gating comes from the FreeCompanyChest addon state. Keeping this watcher as a
-    // fallback for runtime refusals the permission model cannot predict: full stacks, full inventory,
-    // unique-item limits, concurrent chest use, and future patch drift.
-    public unsafe class InventoryRefusalWatcher : IDisposable
+    public unsafe class RefusalWatch : IDisposable
     {
         private static readonly string[] RefusalKeywords =
         {
@@ -38,7 +35,7 @@ namespace FCCH.Common
         private Hook<ShowLogMessageUIntDelegate>? _hookShowUInt;
         private Hook<ShowLogMessageStringDelegate>? _hookShowString;
 
-        public InventoryRefusalWatcher()
+        public RefusalWatch()
         {
             try
             {
@@ -49,19 +46,19 @@ namespace FCCH.Common
 
                 if (!_initialized)
                 {
-                    Plugin.PluginLog.Warning("[RefusalWatcher] Not initialized. ids=" + _refusalLogIds.Count
+                    FCCH.Common.FCCHLog.Warning("[RefusalWatch] Not initialized. ids=" + _refusalLogIds.Count
                         + " hooks=" + (_hookShow != null ? "S" : "-")
                         + (_hookShowUInt != null ? "U" : "-")
                         + (_hookShowString != null ? "T" : "-"));
                 }
                 else
                 {
-                    Plugin.PluginLog.Info($"[RefusalWatcher] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals.");
+                    FCCH.Common.FCCHLog.Info($"[RefusalWatch] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals.");
                 }
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[RefusalWatcher] Initialization failed.");
+                FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Initialization failed.");
             }
         }
 
@@ -92,7 +89,7 @@ namespace FCCH.Common
                     if (text.IndexOf(kw, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         _refusalLogIds.Add(row.RowId);
-                        Plugin.PluginLog.Info($"[RefusalWatcher] LogMessage#{row.RowId}: \"{text}\"");
+                        FCCH.Common.FCCHLog.Info($"[RefusalWatch] LogMessage#{row.RowId}: \"{text}\"");
                         break;
                     }
                 }
@@ -102,7 +99,7 @@ namespace FCCH.Common
         private void InstallHooks()
         {
             var module = RaptureLogModule.Instance();
-            if (module == null) { Plugin.PluginLog.Warning("[RefusalWatcher] RaptureLogModule.Instance() null."); return; }
+            if (module == null) { FCCH.Common.FCCHLog.Warning("[RefusalWatch] RaptureLogModule.Instance() null."); return; }
 
             try
             {
@@ -110,7 +107,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessage, OnShowLogMessage);
                 _hookShow?.Enable();
             }
-            catch (Exception ex) { Plugin.PluginLog.Error(ex, "[RefusalWatcher] Hook ShowLogMessage failed."); }
+            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessage failed."); }
 
             try
             {
@@ -118,7 +115,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageUInt, OnShowLogMessageUInt);
                 _hookShowUInt?.Enable();
             }
-            catch (Exception ex) { Plugin.PluginLog.Error(ex, "[RefusalWatcher] Hook ShowLogMessageUInt failed."); }
+            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageUInt failed."); }
 
             try
             {
@@ -126,7 +123,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageString, OnShowLogMessageString);
                 _hookShowString?.Enable();
             }
-            catch (Exception ex) { Plugin.PluginLog.Error(ex, "[RefusalWatcher] Hook ShowLogMessageString failed."); }
+            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageString failed."); }
         }
 
         private void OnShowLogMessage(RaptureLogModule* thisPtr, uint logMessageId)

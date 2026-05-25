@@ -29,7 +29,7 @@ namespace FCCH.Managers
         private readonly Dictionary<InventoryType, int> _consecutiveRefusalsByTab = new();
         private readonly HashSet<InventoryType> _blockedTabs = new();
 
-        public Common.InventoryRefusalWatcher? RefusalWatcher { get; set; }
+        public Common.RefusalWatch? RefusalWatcher { get; set; }
         private DateTime _lastDispatchUtc = DateTime.MinValue;
         
         private delegate int InventoryManagerMoveItemDelegate(InventoryManager* manager, InventoryType srcInv, ushort srcSlot, InventoryType dstInv, ushort dstSlot, int quantity);
@@ -50,16 +50,16 @@ namespace FCCH.Managers
                 if (Plugin.SigScanner.TryScanText(InvManagerMoveItemSig, out var ptr))
                 {
                     _invManagerMoveItem = Marshal.GetDelegateForFunctionPointer<InventoryManagerMoveItemDelegate>(ptr);
-                    Plugin.PluginLog.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
+                    FCCH.Common.FCCHLog.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
                 }
                 else
                 {
-                    Plugin.PluginLog.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
+                    FCCH.Common.FCCHLog.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
                 }
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
+                FCCH.Common.FCCHLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
             }
         }
 
@@ -78,6 +78,8 @@ namespace FCCH.Managers
             if (MoveQueue.Count == 0) return;
 
             if ((DateTime.Now - LastActionTime).TotalMilliseconds < _configuration.MoveDelayInMs) return;
+
+            if (Common.InventoryOpGate.HasPendingOperation()) return;
 
             ProcessNextMove();
         }
@@ -181,7 +183,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
+                FCCH.Common.FCCHLog.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
                 DebugLog($"[Error] Move failed: {ex.Message}");
                 EmitBatchSummaryIfDrained();
             }
@@ -198,7 +200,7 @@ namespace FCCH.Managers
 
             if (op.IsNativeMove)
             {
-                Plugin.PluginLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
+                FCCH.Common.FCCHLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
                 return false;
             }
 
@@ -221,7 +223,7 @@ namespace FCCH.Managers
         private void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            Plugin.PluginLog.Info(msg);
+            FCCH.Common.FCCHLog.Info(msg);
             Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
         }
         

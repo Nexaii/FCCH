@@ -102,8 +102,8 @@ namespace FCCH.Managers
 
                         if (_configuration.DebugMode)
                         {
-                            Plugin.PluginLog.Info("Scanned Content:");
-                            Plugin.PluginLog.Info(_chestManager.GetDebugContent());
+                            FCCH.Common.FCCHLog.Info("Scanned Content:");
+                            FCCH.Common.FCCHLog.Info(_chestManager.GetDebugContent());
                         }
 
                         OnIndexingComplete?.Invoke();
@@ -135,7 +135,7 @@ namespace FCCH.Managers
             var container = InventoryManager.Instance()->GetInventoryContainer(type);
             if (container == null)
             {
-                Plugin.PluginLog.Info($"[Diag] {type} container=NULL");
+                FCCH.Common.FCCHLog.Info($"[Diag] {type} container=NULL");
                 return;
             }
             int nonEmpty = 0;
@@ -149,7 +149,7 @@ namespace FCCH.Managers
                     nonEmpty++;
                 }
             }
-            Plugin.PluginLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
+            FCCH.Common.FCCHLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
         }
     }
 }

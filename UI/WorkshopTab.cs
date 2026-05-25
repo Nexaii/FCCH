@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 using Lumina.Excel.Sheets;
 using FCCH.GameData;
+using FCCH.IPC;
 using FCCH.Models;
 using FCCH.Managers;
 
@@ -20,7 +21,7 @@ namespace FCCH.UI
         private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
         private readonly WorkshopCache _cache;
-        private readonly Common.WorkshoppaIPC _ipc;
+        private readonly WorkshoppaIPC _workshoppaIPC;
 
         private string _searchFilter = "";
 
@@ -33,12 +34,12 @@ namespace FCCH.UI
         private bool _wasTabActive;
         private int _lastShoppingListSignature;
 
-        public WorkshopTab(ChestHelper helper, Configuration configuration, WorkshopCache cache, Common.WorkshoppaIPC workshoppaIpc)
+        public WorkshopTab(ChestHelper helper, Configuration configuration, WorkshopCache cache, WorkshoppaIPC workshoppaIPC)
         {
             _helper = helper;
             _configuration = configuration;
             _cache = cache;
-            _ipc = workshoppaIpc;
+            _workshoppaIPC = workshoppaIPC;
         }
 
         public void Draw()
@@ -76,7 +77,7 @@ namespace FCCH.UI
                 }
 
                 ImGui.TableNextColumn();
-                if (projectCount > 0 && _ipc.IsAvailable)
+                if (projectCount > 0 && _workshoppaIPC.IsAvailable)
                 {
                     ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
                     if (ImGui.Button("Queue", new Vector2(-1, 0)))
@@ -84,7 +85,7 @@ namespace FCCH.UI
                         int success = 0;
                         foreach (var item in _helper.ShoppingList)
                         {
-                            if (_ipc.AddQueueItem(item.Craft.WorkshopItemId, item.Quantity))
+                            if (_workshoppaIPC.AddQueueItem(item.Craft.WorkshopItemId, item.Quantity))
                                 success++;
                         }
                         if (success > 0)
@@ -97,12 +98,12 @@ namespace FCCH.UI
                 }
 
                 ImGui.TableNextColumn();
-                if (_ipc.IsAvailable)
+                if (_workshoppaIPC.IsAvailable)
                 {
                     ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
                     if (ImGui.Button("Clear WS", new Vector2(-1, 0)))
                     {
-                        if (_ipc.ClearQueue())
+                        if (_workshoppaIPC.ClearQueue())
                             Common.ChatHelper.Info("Workshoppa queue cleared.");
                         else
                             Common.ChatHelper.Warning("Failed to clear \u2014 is Workshoppa busy?");

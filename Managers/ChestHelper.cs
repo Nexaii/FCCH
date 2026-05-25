@@ -37,7 +37,7 @@ namespace FCCH.Managers
         private readonly ChestIndexer _indexer;
         public CrystalManager CrystalMgr { get; init; }
         private readonly ChestCommandHandler _commandHandler;
-        private Common.InventoryRefusalWatcher? _refusalWatcher;
+        private Common.RefusalWatch? _refusalWatcher;
 
         public Configuration Configuration => _configuration;
         public bool IsProcessing => MoveManager.IsProcessing || !_indexer.IsIdle;
@@ -82,12 +82,12 @@ namespace FCCH.Managers
 
             try
             {
-                _refusalWatcher = new Common.InventoryRefusalWatcher();
+                _refusalWatcher = new Common.RefusalWatch();
                 MoveManager.RefusalWatcher = _refusalWatcher;
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[FCCH] Failed to start InventoryRefusalWatcher.");
+                FCCH.Common.FCCHLog.Error(ex, "[FCCH] Failed to start RefusalWatch.");
             }
         }
 
@@ -328,7 +328,7 @@ namespace FCCH.Managers
                 var chest = Plugin.ObjectTable.FirstOrDefault(x => x.Name.ToString().Equals("Company Chest", StringComparison.OrdinalIgnoreCase));
                 if (chest != null)
                 {
-                    Plugin.PluginLog.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
+                    FCCH.Common.FCCHLog.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
                     
                     var targetSystem = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
                     if (targetSystem != null)
@@ -346,7 +346,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                 Plugin.PluginLog.Error(ex, "Failed to interact with chest.");
+                 FCCH.Common.FCCHLog.Error(ex, "Failed to interact with chest.");
                  _pendingCommand = null;
                  _isWaitingForIndex = false;
                  _pendingCommandQueuedAtUtc = DateTime.MinValue;
@@ -478,7 +478,7 @@ namespace FCCH.Managers
         public void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            Plugin.PluginLog.Info(msg);
+            FCCH.Common.FCCHLog.Info(msg);
             
             ChatHelper.Debug(msg);
             
@@ -504,7 +504,7 @@ namespace FCCH.Managers
         {
             if (_indexer.IsIdle)
             {
-                Plugin.PluginLog.Info("[FCCH] Chest opened. Starting full scan...");
+                FCCH.Common.FCCHLog.Info("[FCCH] Chest opened. Starting full scan...");
 
                 ChestManager.ResetIndexingSession();
 

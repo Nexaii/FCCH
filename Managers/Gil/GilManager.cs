@@ -66,7 +66,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to handle InputNumeric");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to handle InputNumeric");
                 _pendingTransaction = null;
             }
         }
@@ -96,7 +96,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to handle Bank deposit");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to handle Bank deposit");
                 _pendingTransaction = null;
             }
         }
@@ -108,12 +108,12 @@ namespace FCCH.Managers.Gil
             {
                 var ptr = Plugin.SigScanner.ScanText(Callback.Sig);
                 _fireCallbackHook = Plugin.GameInteropProvider.HookFromAddress<FireCallbackDelegate>(ptr, FireCallbackDetour);
-                Plugin.PluginLog.Info("[GilManager] Debug hook resolved for FireCallback");
+                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook resolved for FireCallback");
                 return true;
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to resolve debug hook");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to resolve debug hook");
                 return false;
             }
         }
@@ -125,11 +125,11 @@ namespace FCCH.Managers.Gil
             try
             {
                 _fireCallbackHook.Enable();
-                Plugin.PluginLog.Info("[GilManager] Debug hook enabled");
+                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook enabled");
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to enable debug hook");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to enable debug hook");
             }
         }
 
@@ -139,11 +139,11 @@ namespace FCCH.Managers.Gil
             try
             {
                 _fireCallbackHook.Disable();
-                Plugin.PluginLog.Info("[GilManager] Debug hook disabled");
+                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook disabled");
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Failed to disable debug hook");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to disable debug hook");
             }
         }
 
@@ -349,7 +349,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error(ex, "[GilManager] Error disposing debug hook");
+                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Error disposing debug hook");
             }
             Plugin.AddonLifecycle.UnregisterListener(OnInputNumericSetup);
             Plugin.AddonLifecycle.UnregisterListener(OnBankSetup);

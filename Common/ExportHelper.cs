@@ -42,7 +42,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error($"Export failed: {ex.Message}");
+                FCCH.Common.FCCHLog.Error($"Export failed: {ex.Message}");
                 return false;
             }
         }
@@ -78,7 +78,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                Plugin.PluginLog.Error($"Import failed: {ex.Message}");
+                FCCH.Common.FCCHLog.Error($"Import failed: {ex.Message}");
                 return (ImportResult.ParseError, default);
             }
         }
