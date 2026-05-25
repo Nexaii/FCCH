@@ -7,7 +7,7 @@
     <a href="#installation">Installation</a> · <a href="#features">Features</a> · <a href="#commands">Commands</a> · <a href="#ipc">IPC</a>
   </p>
 <p align="center">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json&query=$[?(@.InternalName=='FCCH')].DownloadCount&label=Downloads&color=blue&style=for-the-badge" alt="Downloads" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json&query=$[0].DownloadCount&label=Downloads&color=blue&style=for-the-badge" alt="Downloads" />
     <a href="https://ko-fi.com/nexai">
     <img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Ko-fi" />
 </a>
