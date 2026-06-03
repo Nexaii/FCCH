@@ -20,7 +20,7 @@
 1. **Prerequisites**: [FFXIVQuickLauncher](https://github.com/goatcorp/FFXIVQuickLauncher) with Dalamud enabled.
 2. **Add Repository**: `/xlsettings` → Experimental → Custom Plugin Repositories:
    ```
-   https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json
+   https://puni.sh/api/repository/nexai
    ```
 3. **Install**: `/xlplugins` → Search **FCCH** → Install.
 
