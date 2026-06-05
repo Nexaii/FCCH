@@ -86,6 +86,8 @@ namespace FCCH
             PluginInterface.UiBuilder.OpenMainUi += DrawMain;
             
             Framework.Update += OnUpdate;
+
+            Migration.RepoMigrator.Run();
         }
 
         private bool _wasSettingsOpen = false;
