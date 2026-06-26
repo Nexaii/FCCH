@@ -368,7 +368,11 @@ namespace FCCH.UI
 
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();
-                if (status == OrgJobStatus.Running)
+                if (_service.IsSortRunning)
+                {
+                    ImGui.Text("Status: Sorting...");
+                }
+                else if (status == OrgJobStatus.Running)
                 {
                     ImGui.Text($"Status: Running ({_service.CompletedMoves}/{_service.TotalMoves})");
                 }
@@ -383,14 +387,17 @@ namespace FCCH.UI
                 else if (check != null && check.IsValid)
                 {
                     ImGui.TextColored(new Vector4(0.2f, 0.8f, 0.2f, 1.0f), $"Status: Ready ({check.StackCount} items)");
-                    ImGui.SameLine();
-                    var pColor = check.PlayerBufferOK ? new Vector4(0.5f, 0.8f, 0.5f, 1.0f) : new Vector4(0.8f, 0.5f, 0.5f, 1.0f);
-                    var dColor = check.DestCapacityOK ? new Vector4(0.5f, 0.8f, 0.5f, 1.0f) : new Vector4(0.8f, 0.5f, 0.5f, 1.0f);
-                    ImGui.TextColored(pColor, $"| Player: {check.PlayerFreeSlots}");
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Free slots in player inventory");
-                    ImGui.SameLine();
-                    ImGui.TextColored(dColor, $"| Dest: {check.DestFreeSlots}");
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Free slots in destination");
+                    if (!isSort)
+                    {
+                        ImGui.SameLine();
+                        var pColor = check.PlayerBufferOK ? new Vector4(0.5f, 0.8f, 0.5f, 1.0f) : new Vector4(0.8f, 0.5f, 0.5f, 1.0f);
+                        var dColor = check.DestCapacityOK ? new Vector4(0.5f, 0.8f, 0.5f, 1.0f) : new Vector4(0.8f, 0.5f, 0.5f, 1.0f);
+                        ImGui.TextColored(pColor, $"| Player: {check.PlayerFreeSlots}");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Free slots in player inventory");
+                        ImGui.SameLine();
+                        ImGui.TextColored(dColor, $"| Dest: {check.DestFreeSlots}");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Free slots in destination");
+                    }
                 }
                 else if (check != null)
                 {
@@ -402,7 +409,7 @@ namespace FCCH.UI
                 }
 
                 ImGui.TableNextColumn();
-                bool isRunning = status == OrgJobStatus.Running;
+                bool isRunning = status == OrgJobStatus.Running || _service.IsSortRunning;
                 bool conflict = !isSort && (_selectedSourceIndex == _selectedDestIndex);
                 var gate = _helper.CanStartUserAction();
                 bool blocked = !gate.CanRun && !isRunning;
@@ -414,11 +421,24 @@ namespace FCCH.UI
                 if (ImGui.Button(buttonLabel, new Vector2(-1, 30)))
                 {
                     if (isRunning)
-                        _service.Cancel();
+                    {
+                        if (_service.IsSortRunning) _service.CancelSort();
+                        else _service.Cancel();
+                    }
                     else if (canRun)
-                        _helper.TryStartUserAction(() => _service.Run());
+                    {
+                        if (isSort)
+                            _helper.TryStartUserAction(() => _service.RunSort(_service.CurrentRequest.SourceTab, _service.CurrentRequest.SortOrder, _service.CurrentRequest.SortDescending, _service.CurrentRequest.Filters));
+                        else
+                            _helper.TryStartUserAction(() => _service.Run());
+                    }
                     else
-                        _helper.TryStartUserAction(() => _service.Check());
+                    {
+                        if (isSort)
+                            _helper.TryStartUserAction(() => _service.CheckSort(_service.CurrentRequest.SourceTab, _service.CurrentRequest.SortOrder, _service.CurrentRequest.SortDescending, _service.CurrentRequest.Filters));
+                        else
+                            _helper.TryStartUserAction(() => _service.Check());
+                    }
                 }
                 ImGui.PopStyleColor();
                 if (conflict || blocked) ImGui.EndDisabled();
@@ -480,8 +500,8 @@ namespace FCCH.UI
         {
             _service.Update();
 
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            bool isChestOpen = addon != null && addon->IsVisible;
+            var addon = Common.ChestAddon.GetOpen();
+            bool isChestOpen = addon != null;
 
             if (_wasChestOpen && !isChestOpen)
             {

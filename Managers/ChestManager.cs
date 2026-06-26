@@ -53,7 +53,6 @@ namespace FCCH.Managers
 
         public Dictionary<InventoryType, List<ScannedSlot>> ChestState { get; private set; } = new();
         public List<ScannedSlot> CachedItems { get; private set; } = new();
-        public string ScannedCharacterName { get; private set; } = "";
 
         public class ScannedSlot
         {
@@ -78,10 +77,6 @@ namespace FCCH.Managers
             Common.PerfCounter.RecordScanFCChest();
             _inventoryScanner.Update();
             CachedItems.Clear();
-            if (Plugin.ObjectTable.LocalPlayer != null)
-            {
-                ScannedCharacterName = Plugin.ObjectTable.LocalPlayer.Name.ToString();
-            }
 
             foreach (var kvp in ChestState)
             {
@@ -129,8 +124,8 @@ namespace FCCH.Managers
                     pageCount++;
                 }
 
-                var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-                bool isActivePage = (addon != null && addon->IsVisible && GetCurrentFCPage(addon) == type);
+                var addon = Common.ChestAddon.GetOpen();
+                bool isActivePage = (addon != null && GetCurrentFCPage(addon) == type);
 
                 if (type == InventoryType.FreeCompanyGil && pageItems.Count == 0)
                 {
@@ -239,8 +234,8 @@ namespace FCCH.Managers
         {
             try
             {
-                var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-                if (addon != null && addon->IsVisible)
+                var addon = Common.ChestAddon.GetOpen();
+                if (addon != null)
                 {
                     var p = (byte*)addon;
                     uint packedItems = *(uint*)(p + 0x4DC);
@@ -325,8 +320,8 @@ namespace FCCH.Managers
 
         public string DumpAccessProbe()
         {
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            if (addon == null || !addon->IsVisible)
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null)
             {
                 const string closed = "[AccessProbe] Company Chest addon is not open.";
                 FCCH.Common.FCCHLog.Info(closed);
@@ -407,8 +402,8 @@ namespace FCCH.Managers
 
         public List<InventoryType> GetAvailableTabs()
         {
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            if (addon != null && addon->IsVisible)
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon != null)
             {
                 var tabs = new List<InventoryType>();
                 if (IsNodeVisible(addon, 101)) tabs.Add(InventoryType.FreeCompanyPage1);
@@ -474,42 +469,22 @@ namespace FCCH.Managers
 
 
         
-        public void UpdateCacheAfterMove(InventoryType srcInv, uint srcSlot, InventoryType dstInv, uint dstSlot, uint itemId, uint amount, bool isHq)
+        public long GetItemCountInPlayerInventory(uint itemId)
         {
-            if ((srcInv >= InventoryType.FreeCompanyPage1 && srcInv <= InventoryType.FreeCompanyPage5) || srcInv == InventoryType.FreeCompanyGil || srcInv == InventoryType.FreeCompanyCrystals)
+            long count = 0;
+            foreach (var type in Constants.PlayerInventoryTypes)
             {
-                var srcEntry = CachedItems.Find(x => x.Page == srcInv && x.Slot == srcSlot && x.ItemId == itemId);
-                if (srcEntry != null)
+                var container = GetContainer(type);
+                if (container == null) continue;
+                for (int i = 0; i < container->Size; i++)
                 {
-                    if (srcEntry.Quantity <= amount)
-                        CachedItems.Remove(srcEntry);
-                    else
-                        srcEntry.Quantity -= amount;
+                    var item = container->GetInventorySlot(i);
+                    if (item != null && item->ItemId == itemId) count += item->Quantity;
                 }
             }
-            
-            if ((dstInv >= InventoryType.FreeCompanyPage1 && dstInv <= InventoryType.FreeCompanyPage5) || dstInv == InventoryType.FreeCompanyGil || dstInv == InventoryType.FreeCompanyCrystals)
-            {
-                var dstEntry = CachedItems.Find(x => x.Page == dstInv && x.Slot == dstSlot);
-                if (dstEntry != null)
-                {
-                    dstEntry.Quantity += amount;
-                }
-                else
-                {
-                    CachedItems.Add(new ScannedSlot
-                    {
-                        Page = dstInv,
-                        Slot = dstSlot,
-                        ItemId = itemId,
-                        Quantity = amount,
-                        IsHq = isHq,
-                        MaxStack = 999
-                    });
-                }
-            }
+            return count;
         }
-        
+
         public InventoryContainer* GetContainer(InventoryType type) => _inventoryScanner.GetContainer(type);
         public bool IsInventoryLoaded(InventoryType type) => _inventoryScanner.IsInventoryLoaded(type);
         public void ResetIndexingSession() => _inventoryScanner.ResetSession();

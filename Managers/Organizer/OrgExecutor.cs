@@ -122,8 +122,8 @@ namespace FCCH.Managers.Organizer
             if (_state == ExecutorState.Idle || _state == ExecutorState.Completed || _state == ExecutorState.Failed)
                 return;
 
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            if (addon == null || !addon->IsVisible)
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null)
             {
                 _state = ExecutorState.Failed;
                 StatusMessage = "FC Chest closed unexpectedly.";

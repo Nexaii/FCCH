@@ -1,8 +1,12 @@
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Keys;
 using FCCH;
+using FCCH.Common;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Colors;
 
@@ -63,24 +67,66 @@ namespace FCCH.UI
                 }
                 ImGui.Spacing();
 
-                if (DrawSection("Confirmations"))
+                if (DrawSection("Behavior Rules"))
                 {
-                    DrawSettingRow("Skip Deposit Confirm", () =>
+                    DrawToggleGrid(new[]
                     {
-                        bool disableDep = _configuration.DisableAskDepositAll;
-                        if (ImGui.Checkbox("##skipDep", ref disableDep))
+                        new Toggle("Skip Deposit Confirm", "", "skipDep",
+                            () => _configuration.DisableAskDepositAll, v => _configuration.DisableAskDepositAll = v),
+                        new Toggle("Skip Withdraw Confirm", "", "skipWith",
+                            () => _configuration.DisableAskWithdrawAll, v => _configuration.DisableAskWithdrawAll = v),
+                        new Toggle("Lower Quality on Deposit", "Automatically convert HQ items to NQ before depositing.", "lowerQual",
+                            () => _configuration.LowerQualityOnDeposit, v => _configuration.LowerQualityOnDeposit = v),
+                        new Toggle("Leave One per Stack", "Always leave at least 1 item in the FC Chest when withdrawing.", "leaveOne",
+                            () => _configuration.LeaveOneItemPerStack, v => _configuration.LeaveOneItemPerStack = v),
+                        new Toggle("Compact Item Names", "Shorten supported item names in Custom, Ignore, and Organizer lists.", "compactItemNames",
+                            () => _configuration.CompactItemNames, v => _configuration.CompactItemNames = v),
+                        new Toggle("Search Bar", "Show the search bar overlay on the FC Chest header. Press Ctrl+F to focus it.", "searchBar",
+                            () => _configuration.SearchBarEnabled, v => _configuration.SearchBarEnabled = v),
+                        new Toggle("Item Context Menu", "Add FCCH entries to supported item right-click menus.", "itemContextMenu",
+                            () => _configuration.EnableItemContextMenuEntries, v => _configuration.EnableItemContextMenuEntries = v),
+                        new Toggle("Fast Move", "Modifier + right-click: deposit an inventory item or withdraw a chest item.\nDeposits to the open tab or hold 1-5 to pick a specific tab.", "fastMove",
+                            () => _configuration.FastMoveEnabled, v => _configuration.FastMoveEnabled = v),
+                    });
+
+                    if (_configuration.FastMoveEnabled)
+                    {
+                        DrawSettingRow("  Modifier + Right-Click", DrawModifierDropdown);
+                        DrawFastMoveConflictNote();
+                    }
+                }
+                ImGui.Spacing();
+
+                if (DrawSection("Timing"))
+                {
+                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
+                    if (ImGui.BeginChild("TimingWarning", new Vector2(ImGui.GetContentRegionAvail().X, 40), true))
+                    {
+                        ImGui.TextColored(ImGuiColors.DalamudOrange, "Low delay may cause desync on slow connections.");
+                    }
+                    ImGui.EndChild();
+                    ImGui.PopStyleColor();
+
+                    ImGui.Spacing();
+
+                    DrawSettingRow("Deposit Delay", () =>
+                    {
+                        int depositDelay = _configuration.MoveDelayInMs;
+                        ImGui.SetNextItemWidth(180);
+                        if (ImGui.SliderInt("##depDelay", ref depositDelay, 700, 1500, "%d ms"))
                         {
-                            _configuration.DisableAskDepositAll = disableDep;
+                            _configuration.MoveDelayInMs = depositDelay;
                             _configuration.Save();
                         }
                     });
 
-                    DrawSettingRow("Skip Withdraw Confirm", () =>
+                    DrawSettingRow("Withdraw Delay", () =>
                     {
-                        bool disableWith = _configuration.DisableAskWithdrawAll;
-                        if (ImGui.Checkbox("##skipWith", ref disableWith))
+                        int withdrawDelay = _configuration.WithdrawDelayInMs;
+                        ImGui.SetNextItemWidth(180);
+                        if (ImGui.SliderInt("##withDelay", ref withdrawDelay, 700, 1500, "%d ms"))
                         {
-                            _configuration.DisableAskWithdrawAll = disableWith;
+                            _configuration.WithdrawDelayInMs = withdrawDelay;
                             _configuration.Save();
                         }
                     });
@@ -130,98 +176,7 @@ namespace FCCH.UI
                 }
                 ImGui.Spacing();
 
-                if (DrawSection("Behavior Rules"))
-                {
-                    DrawSettingRow("Lower Quality on Deposit", () =>
-                    {
-                        bool lowerQuality = _configuration.LowerQualityOnDeposit;
-                        if (ImGui.Checkbox("##lowerQual", ref lowerQuality))
-                        {
-                            _configuration.LowerQualityOnDeposit = lowerQuality;
-                            _configuration.Save();
-                        }
-                        ImGui.SameLine();
-                        ImGui.TextDisabled("(?)");
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Automatically convert HQ items to NQ before depositing.");
-                    });
-
-                    DrawSettingRow("Leave One per Stack", () =>
-                    {
-                        bool leaveOne = _configuration.LeaveOneItemPerStack;
-                        if (ImGui.Checkbox("##leaveOne", ref leaveOne))
-                        {
-                            _configuration.LeaveOneItemPerStack = leaveOne;
-                            _configuration.Save();
-                        }
-                        ImGui.SameLine();
-                        ImGui.TextDisabled("(?)");
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Always leave at least 1 item in the FC Chest when withdrawing.");
-                    });
-
-                    DrawSettingRow("Compact Item Names", () =>
-                    {
-                        bool compactNames = _configuration.CompactItemNames;
-                        if (ImGui.Checkbox("##compactItemNames", ref compactNames))
-                        {
-                            _configuration.CompactItemNames = compactNames;
-                            _configuration.Save();
-                        }
-                        ImGui.SameLine();
-                        ImGui.TextDisabled("(?)");
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Shorten supported item names in Custom, Ignore, and Organizer lists.");
-                    });
-
-                    DrawSettingRow("Item Context Menu", () =>
-                    {
-                        bool enabled = _configuration.EnableItemContextMenuEntries;
-                        if (ImGui.Checkbox("##itemContextMenu", ref enabled))
-                        {
-                            _configuration.EnableItemContextMenuEntries = enabled;
-                            _configuration.Save();
-                        }
-                        ImGui.SameLine();
-                        ImGui.TextDisabled("(?)");
-                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Add FCCH entries to supported item right-click menus.");
-                    });
-                }
-                ImGui.Spacing();
-
-                if (DrawSection("Timing"))
-                {
-                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
-                    if (ImGui.BeginChild("TimingWarning", new Vector2(ImGui.GetContentRegionAvail().X, 40), true))
-                    {
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "Low delay may cause desync on slow connections.");
-                    }
-                    ImGui.EndChild();
-                    ImGui.PopStyleColor();
-
-                    ImGui.Spacing();
-
-                    DrawSettingRow("Deposit Delay", () =>
-                    {
-                        int depositDelay = _configuration.MoveDelayInMs;
-                        ImGui.SetNextItemWidth(180);
-                        if (ImGui.SliderInt("##depDelay", ref depositDelay, 700, 1500, "%d ms"))
-                        {
-                            _configuration.MoveDelayInMs = depositDelay;
-                            _configuration.Save();
-                        }
-                    });
-
-                    DrawSettingRow("Withdraw Delay", () =>
-                    {
-                        int withdrawDelay = _configuration.WithdrawDelayInMs;
-                        ImGui.SetNextItemWidth(180);
-                        if (ImGui.SliderInt("##withDelay", ref withdrawDelay, 700, 1500, "%d ms"))
-                        {
-                            _configuration.WithdrawDelayInMs = withdrawDelay;
-                            _configuration.Save();
-                        }
-                    });
-                }
-                ImGui.Spacing();
-
+#if DEBUG
                 if (DrawSection("Diagnostics"))
                 {
                     DrawSettingRow("Enable Debug Mode", () =>
@@ -272,18 +227,25 @@ namespace FCCH.UI
                     ImGui.Spacing();
                     ImGui.TextDisabled("Internal diagnostic commands");
                     ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
-                    float diagnosticBoxHeight = ImGui.GetTextLineHeightWithSpacing() * 5 + ImGui.GetStyle().WindowPadding.Y * 2;
+                    string[] diagnosticCommands =
+                    {
+                        "accessprobe - dump live chest addon permission state",
+                        "debug - toggle debug logging",
+                        "fcperms [row] - dump raw FC rank permission bytes",
+                        "gildebug - trace gil callbacks",
+                        "info - dump FC rank + per-tab access (chest must be open)",
+                        "ipctest - invoke FCCH IPC surface and report pass/fail to /xllog",
+                    };
+                    float diagnosticBoxHeight = ImGui.GetTextLineHeightWithSpacing() * diagnosticCommands.Length + ImGui.GetStyle().WindowPadding.Y * 2;
                     if (ImGui.BeginChild("InternalDiagnosticsBox", new Vector2(ImGui.GetContentRegionAvail().X, diagnosticBoxHeight), true))
                     {
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "debug - toggle debug logging");
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "gildebug - trace gil callbacks");
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "accessprobe - dump live chest addon permission state");
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "fcperms [row] - dump raw FC rank permission bytes");
-                        ImGui.TextColored(ImGuiColors.DalamudOrange, "ipctest - invoke FCCH IPC surface and report pass/fail to /xllog");
+                        foreach (var command in diagnosticCommands)
+                            ImGui.TextColored(ImGuiColors.DalamudOrange, command);
                     }
                     ImGui.EndChild();
                     ImGui.PopStyleColor();
                 }
+#endif
                 ImGui.Spacing();
 
                 ImGui.Spacing();
@@ -323,12 +285,95 @@ namespace FCCH.UI
             }
         }
 
+        private static readonly VirtualKey[] FastMoveModifiers = { VirtualKey.MENU, VirtualKey.CONTROL, VirtualKey.SHIFT };
+
+        private void DrawModifierDropdown()
+        {
+            ImGui.SetNextItemWidth(200);
+            if (ImGui.BeginCombo("##fastMoveMod", _configuration.FastMoveModifier.GetFancyName()))
+            {
+                foreach (var key in FastMoveModifiers)
+                {
+                    if (ImGui.Selectable(key.GetFancyName(), _configuration.FastMoveModifier == key))
+                    {
+                        _configuration.FastMoveModifier = key;
+                        _configuration.Save();
+                    }
+                }
+                ImGui.EndCombo();
+            }
+        }
+
+        private static void DrawFastMoveConflictNote()
+        {
+            const string note = "Fast Move may conflict with other plugins. If it misfires or items go to the wrong destination, disable the other plugin or change the modifier above.";
+
+            ImGui.Spacing();
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
+            float width = ImGui.GetContentRegionAvail().X;
+            float textHeight = ImGui.CalcTextSize(note, false, width - ImGui.GetStyle().WindowPadding.X * 2).Y;
+            float boxHeight = textHeight + ImGui.GetStyle().WindowPadding.Y * 2;
+            if (ImGui.BeginChild("FastMoveConflictNote", new Vector2(width, boxHeight), true))
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudOrange);
+                ImGui.TextWrapped(note);
+                ImGui.PopStyleColor();
+            }
+            ImGui.EndChild();
+            ImGui.PopStyleColor();
+        }
+
         private void DrawSettingRow(string label, System.Action drawControl)
         {
             ImGui.AlignTextToFramePadding();
             ImGui.Text(label);
             ImGui.SameLine(180);
             drawControl();
+        }
+
+        private readonly struct Toggle
+        {
+            public readonly string Label;
+            public readonly string Tooltip;
+            public readonly string Id;
+            public readonly System.Func<bool> Get;
+            public readonly System.Action<bool> Set;
+
+            public Toggle(string label, string tooltip, string id, System.Func<bool> get, System.Action<bool> set)
+            {
+                Label = label;
+                Tooltip = tooltip;
+                Id = id;
+                Get = get;
+                Set = set;
+            }
+        }
+
+        private void DrawToggleGrid(Toggle[] toggles)
+        {
+            float half = ImGui.GetContentRegionAvail().X * 0.5f;
+            for (int i = 0; i < toggles.Length; i++)
+            {
+                if ((i & 1) == 1)
+                    ImGui.SameLine(half);
+                DrawToggleCell(toggles[i]);
+            }
+        }
+
+        private void DrawToggleCell(Toggle toggle)
+        {
+            bool value = toggle.Get();
+            if (ImGui.Checkbox($"{toggle.Label}##{toggle.Id}", ref value))
+            {
+                toggle.Set(value);
+                _configuration.Save();
+            }
+            if (toggle.Tooltip.Length > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(toggle.Tooltip);
+            }
         }
 
         private static bool DrawSection(string label)
@@ -342,15 +387,10 @@ namespace FCCH.UI
             if (_configuration.EnsureToolbarButtons())
                 _configuration.Save();
 
-            DrawSettingRow("Toolbar Buttons", () =>
-            {
-                if (ImGui.Button("Reset##toolbarButtonsReset", new Vector2(120, 0)))
-                {
-                    _configuration.ResetToolbarButtons();
-                    _configuration.Save();
-                }
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Restore the default toolbar button order and visibility.");
-            });
+            var visibleButtons = CountVisibleToolbarButtons();
+            var totalButtons = _configuration.ToolbarButtons.Count;
+            if (!ImGui.CollapsingHeader($"Toolbar Buttons ({visibleButtons} / {totalButtons} shown)###toolbarButtons"))
+                return;
 
             var tableWidth = CalculateToolbarButtonTableWidth();
             if (!ImGui.BeginTable("ToolbarButtonLayout", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.NoHostExtendX, new Vector2(tableWidth, 0)))
@@ -361,7 +401,6 @@ namespace FCCH.UI
             ImGui.TableSetupColumn("Button", ImGuiTableColumnFlags.WidthFixed, tableWidth - 44);
 
             _toolbarButtonDrag.Begin();
-            var visibleCount = CountVisibleToolbarButtons();
             for (var i = 0; i < _configuration.ToolbarButtons.Count; i++)
             {
                 var button = _configuration.ToolbarButtons[i];
@@ -374,7 +413,7 @@ namespace FCCH.UI
                 _toolbarButtonDrag.DrawButtonDummy(button, _configuration.ToolbarButtons, i, _ => _configuration.Save());
 
                 ImGui.TableNextColumn();
-                DrawToolbarButtonToggle(button, visibleCount);
+                DrawToolbarButtonToggle(button, visibleButtons);
 
                 ImGui.TableNextColumn();
                 ImGui.AlignTextToFramePadding();
@@ -385,6 +424,15 @@ namespace FCCH.UI
 
             ImGui.EndTable();
             _toolbarButtonDrag.End();
+
+            const float resetWidth = 120f;
+            ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - resetWidth) * 0.5f);
+            if (ImGui.Button("Reset##toolbarButtonsReset", new Vector2(resetWidth, 0)))
+            {
+                _configuration.ResetToolbarButtons();
+                _configuration.Save();
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Restore the default toolbar button order and visibility.");
         }
 
         private float CalculateToolbarButtonTableWidth()
@@ -446,6 +494,7 @@ namespace FCCH.UI
                 ToolbarButtonId.Withdraw => "Withdraw",
                 ToolbarButtonId.WithdrawCustom => "Withdraw Custom List",
                 ToolbarButtonId.WithdrawWorkshop => "Withdraw Workshop List",
+                ToolbarButtonId.Sort => "Sort/Merge",
                 _ => id.ToString()
             };
         }

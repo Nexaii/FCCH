@@ -33,26 +33,32 @@ namespace FCCH
         [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
         [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
         [PluginService] public static IContextMenu ContextMenu { get; private set; } = null!;
+        [PluginService] public static IKeyState KeyState { get; private set; } = null!;
+        [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
+        [PluginService] public static IGamepadState GamepadState { get; private set; } = null!;
 
         private ChestHelper ChestHelper { get; init; }
         private OverlayManager OverlayManager { get; init; }
+        private SearchBarManager SearchBarManager { get; init; }
         private SettingsWindow SettingsWindow { get; init; }
         private WorkshopCache WorkshopCache { get; init; }
         private Dalamud.Interface.Windowing.WindowSystem WindowSystem { get; init; }
         private OpLockManager OpLockManager { get; init; }
         private GilManager GilManager { get; init; }
-        /// <summary>Owned by Plugin. UI consumers borrow a non-owning reference and must not dispose.</summary>
         private OrgService OrgService { get; init; }
         private ContextMenu ItemContextMenu { get; init; }
         private WorkshoppaIPC WorkshoppaIPC { get; init; }
         private IPCProvider IPC { get; init; }
+        private WhatsNewWindow WhatsNewWindow { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
-        private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, all\n- Info: info";
+        private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, all";
 
         public Plugin()
         {
-            Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+            var savedConfig = PluginInterface.GetPluginConfig() as Configuration;
+            bool isFreshInstall = savedConfig == null;
+            Configuration = savedConfig ?? new Configuration();
             Configuration.Initialize(PluginInterface);
 
             WorkshopCache = new WorkshopCache(Data, PluginLog);
@@ -68,13 +74,17 @@ namespace FCCH
             OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
             ChestHelper.ExternalOperationActive = () => OrgService.JobStatus == OrgJobStatus.Running;
             ChestHelper.CompanyChestClosedDuringOperation += OnCompanyChestClosedDuringOperation;
-            ItemContextMenu = new ContextMenu(Plugin.ContextMenu, Configuration);
+            ItemContextMenu = new ContextMenu(Plugin.ContextMenu, Configuration, ChestHelper, KeyState);
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
+            SearchBarManager = new SearchBarManager(ChestHelper, GameGui, KeyState, Configuration, WindowSystem);
 
             SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIPC);
-            
+            WhatsNewWindow = new WhatsNewWindow();
+            WhatsNewWindow.OpenSettings = () => ChestHelper.IsSettingsVisible = true;
+
             WindowSystem.AddWindow(SettingsWindow);
+            WindowSystem.AddWindow(WhatsNewWindow);
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
@@ -88,6 +98,24 @@ namespace FCCH
             Framework.Update += OnUpdate;
 
             Migration.RepoMigrator.Run();
+
+            ShowWhatsNewIfUnseen(isFreshInstall);
+        }
+
+        private void ShowWhatsNewIfUnseen(bool isFreshInstall)
+        {
+            if (isFreshInstall)
+            {
+                Configuration.LastSeenWhatsNewRevision = Common.WhatsNew.Revision;
+                Configuration.Save();
+                return;
+            }
+
+            if (Common.WhatsNew.Revision <= Configuration.LastSeenWhatsNewRevision) return;
+
+            Configuration.LastSeenWhatsNewRevision = Common.WhatsNew.Revision;
+            Configuration.Save();
+            WhatsNewWindow.IsOpen = true;
         }
 
         private bool _wasSettingsOpen = false;
@@ -102,8 +130,11 @@ namespace FCCH
         private unsafe void OnUpdate(IFramework framework)
         {
             Common.DebugFileLogger.Tick();
+            OrgService.UpdateSortWatch();
+            OrgService.UpdateMergeWatch();
             OverlayManager.Update();
-            
+            SearchBarManager.Update();
+
             if (_wasSettingsOpen && !SettingsWindow.IsOpen)
             {
                 ChestHelper.IsSettingsVisible = false;
@@ -116,8 +147,8 @@ namespace FCCH
 
             _wasSettingsOpen = SettingsWindow.IsOpen;
 
-            var addon = (AtkUnitBase*)GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            bool isChestOpen = addon != null && addon->IsVisible;
+            var addon = Common.ChestAddon.GetOpen();
+            bool isChestOpen = addon != null;
 
             if (_wasChestOpen && !isChestOpen)
             {
@@ -180,6 +211,7 @@ namespace FCCH
                     ChatHelper.Info(CommandHelpMessage);
                     break;
 
+#if DEBUG
                 case "info":
                     ChestHelper.ProcessCommand(() =>
                     {
@@ -206,6 +238,7 @@ namespace FCCH
                         ChatHelper.Info($"Gil: {GilManager.GetPermissionString()}");
                     });
                     break;
+#endif
                 case "gd":
                     ChestHelper.ProcessCommand(() => GilManager.HandleDepositCommand(parts.Length > 1 ? parts[1] : ""));
                     break;
@@ -233,6 +266,11 @@ namespace FCCH
                     Configuration.Save();
                     ChatHelper.Info($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
+#if DEBUG
+                case "whatsnew":
+                    WhatsNewWindow.IsOpen = true;
+                    break;
+#endif
                 default:
                     ChatHelper.Info($"Unknown FCCH command: {subCommand}. Use /fcch help.");
                     break;
@@ -272,6 +310,7 @@ namespace FCCH
 
             ItemContextMenu?.Dispose();
             OverlayManager?.Dispose();
+            SearchBarManager?.Dispose();
             SettingsWindow?.Dispose();
             OrgService?.Dispose();
             GilManager?.Dispose();

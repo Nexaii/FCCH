@@ -31,7 +31,7 @@ namespace FCCH.UI
         private readonly CrystalTabUI _crystalsTab;
         private readonly OrganizerTab _organizerTab;
 
-        private readonly TitleBarButton _kofiButton;
+        private readonly TitleBarButton _donateButton;
         private readonly TitleBarButton _settingsLockButton;
         private readonly TitleBarButton _settingsSnapButton;
         private bool _snapPending;
@@ -60,13 +60,13 @@ namespace FCCH.UI
             _crystalsTab = new CrystalTabUI(configuration, helper.CrystalMgr, helper);
             _organizerTab = new OrganizerTab(orgService, configuration, helper);
 
-            _kofiButton = new TitleBarButton
+            _donateButton = new TitleBarButton
             {
                 Icon = FontAwesomeIcon.Heart,
-                ShowTooltip = () => { ImGui.SetTooltip("Support on Ko-Fi"); },
+                ShowTooltip = () => ImGui.SetTooltip("Support on Patreon"),
                 Priority = int.MinValue,
                 IconOffset = new Vector2(1.5f, 1),
-                Click = _ => OpenKoFiLink(),
+                Click = _ => OpenDonateLink(),
                 AvailableClickthrough = true,
             };
 
@@ -89,6 +89,20 @@ namespace FCCH.UI
             };
         }
 
+        private void OpenDonateLink()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://www.patreon.com/c/Nexairi",
+                    UseShellExecute = true,
+                    Verb = string.Empty,
+                });
+            }
+            catch { }
+        }
+
         private void ToggleSettingsLock()
         {
             _configuration.IsWindowLocked = !_configuration.IsWindowLocked;
@@ -106,28 +120,14 @@ namespace FCCH.UI
             _settingsLockButton.Icon = FontAwesomeIcon.Lock;
         }
 
-        private void OpenKoFiLink()
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "https://ko-fi.com/nexai",
-                    UseShellExecute = true,
-                    Verb = string.Empty,
-                });
-            }
-            catch { }
-        }
-
         public override void PreDraw()
         {
             _organizerTab.Update();
             _fileDialogManager.Draw();
 
-            if (!TitleBarButtons.Contains(_kofiButton))
+            if (!TitleBarButtons.Contains(_donateButton))
             {
-                TitleBarButtons.Add(_kofiButton);
+                TitleBarButtons.Add(_donateButton);
             }
             if (!TitleBarButtons.Contains(_settingsLockButton))
             {

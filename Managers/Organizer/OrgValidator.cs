@@ -565,17 +565,6 @@ namespace FCCH.Managers.Organizer
             return (InventoryType.Invalid, 0);
         }
 
-        private string GetItemName(uint itemId)
-        {
-            try
-            {
-                var sheet = Plugin.Data.GetExcelSheet<Item>();
-                return sheet?.GetRowOrDefault(itemId)?.Name.ToString() ?? $"Item#{itemId}";
-            }
-            catch
-            {
-                return $"Item#{itemId}";
-            }
-        }
+        private string GetItemName(uint itemId) => Common.ItemNames.Get(itemId);
     }
 }

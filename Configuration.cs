@@ -1,4 +1,5 @@
 using Dalamud.Configuration;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using System;
 using System.Collections.Generic;
@@ -33,10 +34,16 @@ namespace FCCH
         
         public Dictionary<string, PresetData> WithdrawPresets { get; set; } = new();
 
+        public int LastSeenWhatsNewRevision { get; set; } = 0;
+
         public bool DebugMode { get; set; } = false;
         public bool VerboseMode { get; set; } = false;
         public bool CompactItemNames { get; set; } = true;
         public bool EnableItemContextMenuEntries { get; set; } = false;
+        public bool FastMoveEnabled { get; set; } = false;
+        public VirtualKey FastMoveModifier { get; set; } = VirtualKey.CONTROL;
+        public bool SearchBarEnabled { get; set; } = true;
+        public bool SearchBarControllerFocus { get; set; } = false;
         public bool ListsOnRightSide { get; set; } = false;
         public bool IsWindowLocked { get; set; } = true;
         public float SettingsPosX { get; set; } = -1f;
@@ -127,6 +134,7 @@ namespace FCCH
                 new() { Id = ToolbarButtonId.Withdraw, IsVisible = true },
                 new() { Id = ToolbarButtonId.WithdrawCustom, IsVisible = true },
                 new() { Id = ToolbarButtonId.WithdrawWorkshop, IsVisible = true },
+                new() { Id = ToolbarButtonId.Sort, IsVisible = true },
             };
         }
     }
@@ -146,7 +154,8 @@ namespace FCCH
         Crystals = 4,
         Withdraw = 5,
         WithdrawCustom = 6,
-        WithdrawWorkshop = 7
+        WithdrawWorkshop = 7,
+        Sort = 8
     }
 
     public class WithdrawItem

@@ -128,9 +128,9 @@ namespace FCCH.Managers
 
         public void Update()
         {
-            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            var addon = Common.ChestAddon.GetOpen();
 
-            if (addon == null || !addon->IsVisible)
+            if (addon == null)
             {
                 if (_loadedInventories.Count > 0)
                 {

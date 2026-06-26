@@ -2,7 +2,7 @@
     "Author": "Nexai",
     "Name": "FCCH",
     "InternalName": "FCCH",
-    "AssemblyVersion": "2.3.2.0",
+    "AssemblyVersion": "2.4.0.0",
     "Description": "Free Company Chest Helper. Automate deposits, withdrawals, organization, crystals, workshop project pulls, and custom item lists.",
     "Punchline": "You ain't savin these slots, you puttin em to work.",
     "ApplicableVersion": "any",
@@ -19,5 +19,5 @@
     "SupportsProfiles": true,
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/fcch.png",
-    "Changelog": "Moved to puni.sh, updates switch over automatically. New repo: https://puni.sh/api/repository/nexai"
+    "Changelog": "New: Chest search bar with highlighted matches, modifier-click Fast Move to deposit/withdraw a single item, and a Merge action that consolidates stacks in place.\nRebuilt Sort to reorder items within the tab natively.\nCrystals: right-click a cell to set its keep amount inline (no more popup)."
 }

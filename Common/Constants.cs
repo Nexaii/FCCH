@@ -1,7 +1,17 @@
+using FFXIVClientStructs.FFXIV.Client.Game;
+
 namespace FCCH.Common
 {
     public static class Constants
     {
+        public static readonly InventoryType[] PlayerInventoryTypes =
+        {
+            InventoryType.Inventory1,
+            InventoryType.Inventory2,
+            InventoryType.Inventory3,
+            InventoryType.Inventory4,
+        };
+
         public const string FC_CHEST_ADDON_NAME = "FreeCompanyChest";
         public const string INPUT_NUMERIC_ADDON_NAME = "InputNumeric";
 

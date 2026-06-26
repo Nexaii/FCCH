@@ -53,66 +53,9 @@ namespace FCCH.UI
             int missingCount = totalMats.Count(m => m.Have < m.Need);
             int projectCount = _helper.ShoppingList.Count;
 
-            if (ImGui.BeginTable("##workshopHeader", 4))
-            {
-                ImGui.TableSetupColumn("##label", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("##clearlist", ImGuiTableColumnFlags.WidthFixed, 80);
-                ImGui.TableSetupColumn("##queue", ImGuiTableColumnFlags.WidthFixed, 70);
-                ImGui.TableSetupColumn("##clearws", ImGuiTableColumnFlags.WidthFixed, 70);
-                ImGui.TableNextRow();
+            ImGui.TextDisabled($"Projects ({projectCount}) | Materials: {totalMats.Count}, {missingCount} missing");
 
-                ImGui.TableNextColumn();
-                ImGui.TextDisabled($"Projects ({projectCount}) | Materials: {totalMats.Count}, {missingCount} missing");
-
-                ImGui.TableNextColumn();
-                if (projectCount > 0)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-                    if (ImGui.Button("Clear List", new Vector2(-1, 0)))
-                    {
-                        _helper.ShoppingList.Clear();
-                        _expandedProjects.Clear();
-                    }
-                    ImGui.PopStyleColor();
-                }
-
-                ImGui.TableNextColumn();
-                if (projectCount > 0 && _workshoppaIPC.IsAvailable)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-                    if (ImGui.Button("Queue", new Vector2(-1, 0)))
-                    {
-                        int success = 0;
-                        foreach (var item in _helper.ShoppingList)
-                        {
-                            if (_workshoppaIPC.AddQueueItem(item.Craft.WorkshopItemId, item.Quantity))
-                                success++;
-                        }
-                        if (success > 0)
-                            Common.ChatHelper.Info($"Queued {success} projects to Workshoppa.");
-                        else
-                            Common.ChatHelper.Warning("Failed to queue \u2014 is Workshoppa busy?");
-                    }
-                    ImGui.PopStyleColor();
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Send projects to Workshoppa queue");
-                }
-
-                ImGui.TableNextColumn();
-                if (_workshoppaIPC.IsAvailable)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-                    if (ImGui.Button("Clear WS", new Vector2(-1, 0)))
-                    {
-                        if (_workshoppaIPC.ClearQueue())
-                            Common.ChatHelper.Info("Workshoppa queue cleared.");
-                        else
-                            Common.ChatHelper.Warning("Failed to clear \u2014 is Workshoppa busy?");
-                    }
-                    ImGui.PopStyleColor();
-                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Clear Workshoppa queue");
-                }
-                ImGui.EndTable();
-            }
+            DrawHeaderButtons(projectCount);
 
             float footerHeight = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y * 2;
 
@@ -210,6 +153,87 @@ namespace FCCH.UI
             DrawSearchBox();
 
             DrawSavePresetModal();
+        }
+
+        private void DrawHeaderButtons(int projectCount)
+        {
+            bool hasProjects = projectCount > 0;
+            bool ws = _workshoppaIPC.IsAvailable;
+
+            int cols = 3 + (ws ? 2 : 0);
+            if (ImGui.BeginTable("##workshopButtons", cols))
+            {
+                ImGui.TableSetupColumn("##withdraw", ImGuiTableColumnFlags.WidthFixed, 90);
+                ImGui.TableSetupColumn("##clear", ImGuiTableColumnFlags.WidthFixed, 70);
+                ImGui.TableSetupColumn("##spacer", ImGuiTableColumnFlags.WidthStretch);
+                if (ws)
+                {
+                    ImGui.TableSetupColumn("##wsqueue", ImGuiTableColumnFlags.WidthFixed, 90);
+                    ImGui.TableSetupColumn("##wsclear", ImGuiTableColumnFlags.WidthFixed, 80);
+                }
+                ImGui.TableNextRow();
+
+                ImGui.TableNextColumn();
+                var gate = _helper.CanStartUserAction();
+                if (!hasProjects || !gate.CanRun) ImGui.BeginDisabled();
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                if (ImGui.Button("Withdraw", new Vector2(-1, 0)))
+                    _helper.ProcessCommand(() => _helper.WithdrawWorkshopItems());
+                ImGui.PopStyleColor();
+                if (!hasProjects || !gate.CanRun) ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(!gate.CanRun ? gate.Reason : "Withdraw all materials for these projects");
+
+                ImGui.TableNextColumn();
+                if (!hasProjects) ImGui.BeginDisabled();
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                if (ImGui.Button("Clear", new Vector2(-1, 0)))
+                {
+                    _helper.ShoppingList.Clear();
+                    _expandedProjects.Clear();
+                }
+                ImGui.PopStyleColor();
+                if (!hasProjects) ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Clear the project list");
+
+                ImGui.TableNextColumn();
+
+                if (ws)
+                {
+                    ImGui.TableNextColumn();
+                    if (!hasProjects) ImGui.BeginDisabled();
+                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                    if (ImGui.Button("WS Queue", new Vector2(-1, 0)))
+                    {
+                        int success = 0;
+                        foreach (var item in _helper.ShoppingList)
+                        {
+                            if (_workshoppaIPC.AddQueueItem(item.Craft.WorkshopItemId, item.Quantity))
+                                success++;
+                        }
+                        if (success > 0)
+                            Common.ChatHelper.Info($"Queued {success} projects to Workshoppa.");
+                        else
+                            Common.ChatHelper.Warning("Failed to queue - is Workshoppa busy?");
+                    }
+                    ImGui.PopStyleColor();
+                    if (!hasProjects) ImGui.EndDisabled();
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Queue projects in Workshoppa");
+
+                    ImGui.TableNextColumn();
+                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                    if (ImGui.Button("WS Clear", new Vector2(-1, 0)))
+                    {
+                        if (_workshoppaIPC.ClearQueue())
+                            Common.ChatHelper.Info("Workshoppa queue cleared.");
+                        else
+                            Common.ChatHelper.Warning("Failed to clear - is Workshoppa busy?");
+                    }
+                    ImGui.PopStyleColor();
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Clear Workshoppa's queue");
+                }
+                ImGui.EndTable();
+            }
         }
 
         private void DrawSearchBox()

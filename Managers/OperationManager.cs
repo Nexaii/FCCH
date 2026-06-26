@@ -68,7 +68,8 @@ namespace FCCH.Managers
             ChestManager chestManager,
             Configuration config,
             InventoryType[] playerInvTypes,
-            InventoryType targetTab)
+            InventoryType targetTab,
+            (InventoryType SrcType, uint SrcSlot)? sourceSlot = null)
         {
             var depositable = chestManager.GetDepositableTabs();
             if (!depositable.Contains(targetTab))
@@ -77,7 +78,7 @@ namespace FCCH.Managers
                 ChatHelper.Warning($"Tab {tabNum} is not depositable (permissions or unavailable).");
                 return new List<MoveOperation>();
             }
-            return CalculateDepositMovesCore(chestManager, config, playerInvTypes, new List<InventoryType> { targetTab });
+            return CalculateDepositMovesCore(chestManager, config, playerInvTypes, new List<InventoryType> { targetTab }, sourceSlot: sourceSlot);
         }
 
         public static List<MoveOperation> CalculateDepositMoves(
@@ -92,7 +93,8 @@ namespace FCCH.Managers
             Configuration config,
             InventoryType[] playerInvTypes,
             IReadOnlyList<InventoryType> allowedTabs,
-            Dictionary<uint, long>? itemLimits = null)
+            Dictionary<uint, long>? itemLimits = null,
+            (InventoryType SrcType, uint SrcSlot)? sourceSlot = null)
         {
             var moves = new List<MoveOperation>();
             var virtualFC = chestManager.CachedItems.ToList();
@@ -117,11 +119,15 @@ namespace FCCH.Managers
 
             foreach (var type in playerInvTypes)
             {
+                if (sourceSlot.HasValue && type != sourceSlot.Value.SrcType) continue;
+
                 var container = chestManager.GetContainer(type);
                 if (container == null) continue;
 
                 for (int i = 0; i < container->Size; i++)
                 {
+                    if (sourceSlot.HasValue && i != sourceSlot.Value.SrcSlot) continue;
+
                     var item = container->GetInventorySlot(i);
                     if (item == null || item->ItemId == 0) continue;
 
@@ -142,7 +148,10 @@ namespace FCCH.Managers
                             isUntradable = row.Value.IsUntradable;
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        FCCH.Common.FCCHLog.Warning($"[Deposit] IsUntradable lookup failed for Item#{item->ItemId}: {ex.Message}");
+                    }
 
                     if (isUntradable) continue;
 
@@ -548,57 +557,5 @@ namespace FCCH.Managers
             return (InventoryType.Invalid, 0);
         }
 
-         public static (InventoryType, uint) FindVirtualSpace(
-            Dictionary<(InventoryType, uint), uint> quantities, 
-            Dictionary<(InventoryType, uint), uint> itemIds, 
-            Dictionary<(InventoryType, uint), bool> itemHqs,
-            uint itemId, 
-            bool isHq,
-            InventoryType[] types,
-            bool stackOnly = false,
-            bool emptyOnly = false)
-        {
-            if (!emptyOnly)
-            {
-                foreach (var type in types)
-                {
-                    for (uint i = 0; i < Constants.PLAYER_INVENTORY_PAGE_SIZE; i++)
-                    {
-                        var key = (type, i);
-                        if (!quantities.ContainsKey(key)) continue;
-
-                        uint currentQty = quantities[key];
-                        uint currentId = itemIds[key];
-                        bool currentHq = itemHqs.ContainsKey(key) ? itemHqs[key] : false;
-
-                        if (currentId == itemId && currentHq == isHq)
-                        {
-                            if (currentQty < 999)
-                            {
-                                return (type, i);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (stackOnly) return (InventoryType.Invalid, 0u);
-
-            foreach (var type in types)
-            {
-                for (uint i = 0; i < Constants.FC_CHEST_PAGE_SIZE; i++)
-                {
-                    var key = (type, i);
-                    if (!quantities.ContainsKey(key)) continue;
-
-                    if (quantities[key] == 0) 
-                    {
-                        return (type, i);
-                    }
-                }
-            }
-
-            return (InventoryType.Invalid, 0u);
-        }
     }
 }

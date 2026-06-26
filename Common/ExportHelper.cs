@@ -7,13 +7,8 @@ using Dalamud.Bindings.ImGui;
 
 namespace FCCH.Common
 {
-    /// <summary>
-    /// Helper for exporting/importing tab data via clipboard
-    /// Each tab uses a unique header prefix for validation
-    /// </summary>
     public static class ExportHelper
     {
-        // Unique headers for each tab type
         public const string HEADER_IGNORE = "FCCH_IGN_";
         public const string HEADER_SINGLES = "FCCH_SNG_";
         public const string HEADER_WORKSHOP = "FCCH_WKS_";
@@ -27,9 +22,6 @@ namespace FCCH.Common
             ParseError
         }
 
-        /// <summary>
-        /// Export data to clipboard with header prefix
-        /// </summary>
         public static bool Export<T>(string header, T data)
         {
             try
@@ -47,9 +39,6 @@ namespace FCCH.Common
             }
         }
 
-        /// <summary>
-        /// Import data from clipboard, validating header
-        /// </summary>
         public static (ImportResult Result, T? Data) Import<T>(string expectedHeader)
         {
             try
@@ -83,9 +72,6 @@ namespace FCCH.Common
             }
         }
 
-        /// <summary>
-        /// Error message for import result
-        /// </summary>
         public static string GetErrorMessage(ImportResult result, string tabName)
         {
             return result switch

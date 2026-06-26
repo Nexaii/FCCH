@@ -191,6 +191,13 @@ namespace FCCH.Managers
 
         private bool DispatchMove(InventoryManager* invManager, MoveOperation op)
         {
+            if (op.SortSwap)
+            {
+                int swapRc = invManager->MoveItemSlot(op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, true);
+                DebugLog($"[Move/SortSwap] Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) rc={swapRc}");
+                return true;
+            }
+
             if (_invManagerMoveItem != null)
             {
                 int rc = _invManagerMoveItem(invManager, op.SrcInv, (ushort)op.SrcSlot, op.DstInv, (ushort)op.DstSlot, (int)op.Amount);
@@ -227,11 +234,6 @@ namespace FCCH.Managers
             Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
         }
         
-        public void SetDelay()
-        {
-            LastActionTime = DateTime.Now;
-        }
-
         public void Clear()
         {
             MoveQueue.Clear();
@@ -243,9 +245,6 @@ namespace FCCH.Managers
             _consecutiveRefusalsByTab.Clear();
             _blockedTabs.Clear();
         }
-
-        private static InventoryType DepositGuardTab(in MoveOperation op) => op.DstInv;
-        private static InventoryType WithdrawGuardTab(in MoveOperation op) => op.SrcInv;
 
         private static InventoryType GuardTabFor(in MoveOperation op)
         {

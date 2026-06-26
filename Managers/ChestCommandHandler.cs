@@ -28,13 +28,7 @@ namespace FCCH.Managers
             _indexer = indexer;
         }
 
-        private static readonly InventoryType[] PlayerInvTypes =
-        {
-            InventoryType.Inventory1,
-            InventoryType.Inventory2,
-            InventoryType.Inventory3,
-            InventoryType.Inventory4
-        };
+        private static readonly InventoryType[] PlayerInvTypes = Constants.PlayerInventoryTypes;
 
         public void DepositAll()
         {
@@ -119,21 +113,39 @@ namespace FCCH.Managers
         private static string FormatTabs(IEnumerable<InventoryType> tabs)
             => string.Join(", ", tabs.Select(x => ((int)x - (int)InventoryType.FreeCompanyPage1 + 1).ToString()));
 
+        private bool TryGuardTab(InventoryType tab, bool needWithdraw, out string error)
+        {
+            int tabNum = ((int)tab - (int)InventoryType.FreeCompanyPage1) + 1;
+
+            if (!_chestManager.GetAvailableTabs().Contains(tab))
+            {
+                error = $"Tab {tabNum} not unlocked yet.";
+                return false;
+            }
+
+            var access = _chestManager.GetChestAccess(tab);
+            bool allowed = needWithdraw
+                ? access == Constants.FCPermissions.FULL_ACCESS
+                : access == Constants.FCPermissions.FULL_ACCESS || access == Constants.FCPermissions.DEPOSIT_ONLY;
+
+            if (!allowed)
+            {
+                error = needWithdraw ? $"Tab {tabNum}: no withdraw permission." : $"Tab {tabNum}: no deposit permission.";
+                return false;
+            }
+
+            error = "";
+            return true;
+        }
+
         public void DepositToTab(int tab)
         {
             if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
-            if (!_chestManager.GetAvailableTabs().Contains(target))
+            if (!TryGuardTab(target, false, out var guardError))
             {
-                ChatHelper.Warning($"Tab {tab} not unlocked yet.");
-                return;
-            }
-
-            var depAccess = _chestManager.GetChestAccess(target);
-            if (depAccess != Constants.FCPermissions.FULL_ACCESS && depAccess != Constants.FCPermissions.DEPOSIT_ONLY)
-            {
-                ChatHelper.Warning($"Tab {tab}: no deposit permission.");
+                ChatHelper.Warning(guardError);
                 return;
             }
 
@@ -152,6 +164,61 @@ namespace FCCH.Managers
 
             if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for deposit to Tab {tab}.");
             else ChatHelper.Info($"No items to deposit to Tab {tab}.");
+        }
+
+        public void DepositItemToTab(InventoryType srcType, uint srcSlot, InventoryType destTab)
+        {
+            int tab = ((int)destTab - (int)InventoryType.FreeCompanyPage1) + 1;
+
+            if (!TryGuardTab(destTab, false, out var guardError))
+            {
+                ChatHelper.Warning(guardError);
+                return;
+            }
+
+            _moveManager.Clear();
+            _chestManager.ScanFCChest();
+
+            var moves = OperationManager.CalculateDepositMoves(_chestManager, _configuration, PlayerInvTypes, destTab, (srcType, srcSlot));
+
+            foreach (var move in moves)
+            {
+                _moveManager.Enqueue(move);
+            }
+
+            if (OperationManager.LastDepositOverflow.Count > 0)
+                ChatHelper.Warning($"Item skipped - Tab {tab} full.");
+            else if (moves.Count == 0)
+                ChatHelper.Info($"Nothing to deposit to Tab {tab}.");
+        }
+
+        public void WithdrawItemStack(InventoryType srcPage, uint itemId, int amount)
+        {
+            if (amount <= 0) return;
+
+            int tab = ((int)srcPage - (int)InventoryType.FreeCompanyPage1) + 1;
+            if (_chestManager.GetChestAccess(srcPage) != Constants.FCPermissions.FULL_ACCESS)
+            {
+                ChatHelper.Warning($"Tab {tab}: no withdraw permission.");
+                return;
+            }
+
+            _moveManager.Clear();
+            _chestManager.ScanFCChest();
+
+            var requirements = new Dictionary<uint, int> { [itemId] = amount };
+            var moves = OperationManager.CalculateWithdrawMoves(
+                _chestManager, _configuration, requirements, PlayerInvTypes,
+                ignoreLeaveOneRule: false,
+                sourcePageFilter: srcPage);
+
+            foreach (var move in moves)
+            {
+                _moveManager.Enqueue(move);
+            }
+
+            if (moves.Count == 0)
+                ChatHelper.Info("Nothing to withdraw.");
         }
 
         public void DepositDuplicates()
@@ -177,15 +244,9 @@ namespace FCCH.Managers
             if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
-            if (!_chestManager.GetAvailableTabs().Contains(target))
+            if (!TryGuardTab(target, true, out var guardError))
             {
-                ChatHelper.Warning($"Tab {tab} not unlocked yet.");
-                return;
-            }
-
-            if (_chestManager.GetChestAccess(target) != Constants.FCPermissions.FULL_ACCESS)
-            {
-                ChatHelper.Warning($"Tab {tab}: no withdraw permission.");
+                ChatHelper.Warning(guardError);
                 return;
             }
 
@@ -320,25 +381,8 @@ namespace FCCH.Managers
 
         private int GetCustomMaxAmount(uint itemId, bool deposit)
         {
-            long amount = deposit ? GetPlayerInventoryCount(itemId) : GetChestAvailableCount(itemId);
+            long amount = deposit ? _chestManager.GetItemCountInPlayerInventory(itemId) : GetChestAvailableCount(itemId);
             return amount > int.MaxValue ? int.MaxValue : (int)Math.Max(0, amount);
-        }
-
-        private long GetPlayerInventoryCount(uint itemId)
-        {
-            long count = 0;
-            foreach (var type in PlayerInvTypes)
-            {
-                var container = _chestManager.GetContainer(type);
-                if (container == null) continue;
-
-                for (int i = 0; i < container->Size; i++)
-                {
-                    var item = container->GetInventorySlot(i);
-                    if (item != null && item->ItemId == itemId) count += item->Quantity;
-                }
-            }
-            return count;
         }
 
         private long GetChestAvailableCount(uint itemId)

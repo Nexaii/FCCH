@@ -12,5 +12,6 @@ namespace FCCH.Models
         public uint Amount;
         public bool IsNativeMove;
         public bool PendingSplit;
+        public bool SortSwap;
     }
 }

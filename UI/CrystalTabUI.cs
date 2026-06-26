@@ -131,7 +131,7 @@ namespace FCCH.UI
 
                 ImGui.Spacing();
 
-                string legendText = "Left click: Toggle On/Off  |  Right click: Custom amount  |  * = Overrides Global";
+                string legendText = "Left-click: toggle  |  Right-click: set keep (= global clears)  |  * = override";
                 ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudGrey);
                 float legendWidth = ImGui.CalcTextSize(legendText).X;
                 ImGui.SetCursorPosX((ImGui.GetContentRegionAvail().X - legendWidth) * 0.5f);
@@ -163,10 +163,18 @@ namespace FCCH.UI
             }
         }
 
-        private Dictionary<uint, int> _editingValues = new();
+        private uint _editingCell;
+        private int _editBuffer;
+        private bool _editFocusPending;
 
         private void DrawCell(uint id)
         {
+            if (id == _editingCell && id != 0)
+            {
+                DrawCellEdit(id);
+                return;
+            }
+
             var enabled = _configuration.CrystalConfig.EnabledIds.Contains(id);
             var hasCustom = _configuration.CrystalConfig.CustomKeepAmounts.ContainsKey(id);
             var style = ImGui.GetStyle();
@@ -204,54 +212,52 @@ namespace FCCH.UI
                 _configuration.Save();
             }
 
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+            {
+                _editingCell = id;
+                _editBuffer = hasCustom
+                    ? _configuration.CrystalConfig.CustomKeepAmounts[id]
+                    : _configuration.CrystalConfig.GlobalKeepAmount;
+                _editFocusPending = true;
+            }
+
             ImGui.PopStyleColor(3);
+        }
 
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 10));
-            ImGui.PushStyleVar(ImGuiStyleVar.PopupRounding, 4f);
-            ImGui.PushStyleColor(ImGuiCol.PopupBg, new Vector4(0.15f, 0.15f, 0.15f, 0.95f));
-            if (ImGui.BeginPopupContextItem($"Ctx{id}"))
+        private void DrawCellEdit(uint id)
+        {
+            if (_editFocusPending)
             {
-                if (!_editingValues.ContainsKey(id))
-                {
-                    _editingValues[id] = hasCustom
-                        ? _configuration.CrystalConfig.CustomKeepAmounts[id]
-                        : _configuration.CrystalConfig.GlobalKeepAmount;
-                }
+                ImGui.SetKeyboardFocusHere();
+                _editFocusPending = false;
+            }
 
-                int val = _editingValues[id];
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputInt($"##edit{id}", ref _editBuffer, flags: ImGuiInputTextFlags.EnterReturnsTrue);
 
-                ImGui.Text("Custom Keep Amount:");
-                ImGui.SetNextItemWidth(120);
-                if (ImGui.InputInt("##CustomKeep", ref val))
-                {
-                    if (val < 0) val = 0;
-                    if (val > 9999) val = 9999;
-                    
-                    _configuration.CrystalConfig.CustomKeepAmounts[id] = val;
-                    _configuration.Save();
-                    _editingValues[id] = val;
-                }
+            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+            {
+                _editingCell = 0;
+                return;
+            }
 
-                ImGui.Spacing();
+            bool commit = ImGui.IsItemDeactivated()
+                || ImGui.IsKeyPressed(ImGuiKey.Enter)
+                || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter);
 
-                ImGui.SameLine();
-                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
-                if (ImGui.Button("Clear", new Vector2(55, 0)))
-                {
+            if (commit)
+            {
+                if (_editBuffer < 0) _editBuffer = 0;
+                if (_editBuffer > 9999) _editBuffer = 9999;
+
+                if (_editBuffer == _configuration.CrystalConfig.GlobalKeepAmount)
                     _configuration.CrystalConfig.CustomKeepAmounts.Remove(id);
-                    _configuration.Save();
-                    ImGui.CloseCurrentPopup();
-                    _editingValues.Remove(id);
-                }
-                ImGui.PopStyleColor();
-                ImGui.EndPopup();
+                else
+                    _configuration.CrystalConfig.CustomKeepAmounts[id] = _editBuffer;
+
+                _configuration.Save();
+                _editingCell = 0;
             }
-            else
-            {
-                if (_editingValues.ContainsKey(id)) _editingValues.Remove(id);
-            }
-            ImGui.PopStyleColor();
-            ImGui.PopStyleVar(2);
         }
 
         private void ToggleAll()

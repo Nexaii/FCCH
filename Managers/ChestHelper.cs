@@ -46,12 +46,9 @@ namespace FCCH.Managers
         public List<Models.ShoppingItem> ShoppingList => _configuration.ShoppingItems;
         public bool IsSettingsVisible { get; set; } = false;
         public ItemFilter ItemFilter { get; private set; }
-        public string LastError { get; private set; } = "";
 
-        public bool IsChestFullyScanned => ChestManager.IsFullyScanned;
         public event System.Action? CompanyChestClosedDuringOperation;
 
-        private bool _wasProcessing = false;
         private bool _wasMoving = false;
         private bool _wasChestOpen = false;
 
@@ -96,8 +93,8 @@ namespace FCCH.Managers
             var __perfStart = System.Diagnostics.Stopwatch.GetTimestamp();
             try
             {
-            var addon = Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            var isChestOpen = addon != null && addon->IsVisible;
+            var addon = Common.ChestAddon.GetOpen();
+            var isChestOpen = addon != null;
 
             if (_wasChestOpen && !isChestOpen && HasAbortableWork())
             {
@@ -150,8 +147,8 @@ namespace FCCH.Managers
             
             if (IsProcessing || (DateTime.Now - MoveManager.LastActionTime).TotalSeconds < 2.0)
             {
-                var fcChest = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-                if (fcChest != null && fcChest->IsVisible)
+                var fcChest = Common.ChestAddon.GetOpen();
+                if (fcChest != null)
                 {
                     var numeric = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.INPUT_NUMERIC_ADDON_NAME, 1);
                     if (numeric != null && numeric->IsVisible)
@@ -161,7 +158,6 @@ namespace FCCH.Managers
                 }
             }
             
-            bool currentProcessing = IsProcessing;
             bool wasMoving = _wasMoving;
             bool currentMoving = MoveManager.IsProcessing;
             
@@ -193,8 +189,7 @@ namespace FCCH.Managers
                 if (!MoveManager.SuppressCompletionSound)
                     SoundHelper.PlayCompletionSound(_configuration);
             }
-            
-            _wasProcessing = currentProcessing;
+
             _wasMoving = currentMoving;
             }
             finally
@@ -221,7 +216,6 @@ namespace FCCH.Managers
             _isWaitingForIndex = false;
             _pendingCommandQueuedAtUtc = DateTime.MinValue;
             _indexingCompleteTime = DateTime.MinValue;
-            _wasProcessing = false;
             _wasMoving = false;
             CompanyChestClosedDuringOperation?.Invoke();
             ChatHelper.Warning("FCCH stopped because the company chest was closed.");
@@ -279,16 +273,13 @@ namespace FCCH.Managers
         {
             try
             {
-                var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-                return addon != null && addon->IsVisible;
+                return Common.ChestAddon.GetOpen() != null;
             }
             catch
             {
                 return false;
             }
         }
-
-        public bool HasPendingCommand => _pendingCommand != null;
 
         public ActionGateResult CanAcceptCommand()
         {
@@ -371,6 +362,25 @@ namespace FCCH.Managers
         }
         public void DepositToTab(int tab) => _commandHandler.DepositToTab(tab);
         public void WithdrawFromTab(int tab) => _commandHandler.WithdrawFromTab(tab);
+        public void DepositItemToTab(InventoryType srcType, uint srcSlot, InventoryType destTab) => _commandHandler.DepositItemToTab(srcType, srcSlot, destTab);
+        public void WithdrawItemStack(InventoryType srcPage, uint itemId, int amount) => _commandHandler.WithdrawItemStack(srcPage, itemId, amount);
+
+        public InventoryType GetOpenChestPage()
+        {
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null) return InventoryType.Invalid;
+            return ChestManager.GetCurrentFCPage(addon);
+        }
+
+        public (uint ItemId, uint Quantity)? GetChestSlot(InventoryType page, int slot)
+        {
+            if (slot < 0) return null;
+            var container = ChestManager.GetContainer(page);
+            if (container == null || slot >= container->Size) return null;
+            var item = container->GetInventorySlot(slot);
+            if (item == null || item->ItemId == 0) return null;
+            return ((uint)item->ItemId, (uint)item->Quantity);
+        }
         public void StartIndexing(bool autoDump) => _commandHandler.StartIndexing(autoDump);
         public void Stop() => _commandHandler.Stop();
 
@@ -393,22 +403,7 @@ namespace FCCH.Managers
             return list;
         }
         
-        public long GetItemCountInPlayerInventory(uint itemId)
-        {
-            long count = 0;
-            var types = new[] { InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4 };
-            foreach(var t in types)
-            {
-               var container = ChestManager.GetContainer(t);
-               if (container == null) continue;
-               for(int i=0; i<container->Size; i++)
-               {
-                   var item = container->GetInventorySlot(i);
-                   if (item != null && item->ItemId == itemId) count += item->Quantity;
-               }
-            }
-            return count;
-        }
+        public long GetItemCountInPlayerInventory(uint itemId) => ChestManager.GetItemCountInPlayerInventory(itemId);
 
         public long GetItemCountInChest(uint itemId)
         {
@@ -416,14 +411,6 @@ namespace FCCH.Managers
                 .SelectMany(x => x)
                 .Where(x => x.ItemId == itemId)
                 .Sum(x => x.Quantity);
-        }
-
-        public long GetEffectiveItemCountInChest(uint itemId)
-        {
-            return ChestManager.ChestState.Values
-                .SelectMany(x => x)
-                .Where(x => x.ItemId == itemId)
-                .Sum(x => (long)x.Quantity);
         }
 
         public long GetWithdrawableItemCountInChest(uint itemId)
@@ -436,17 +423,7 @@ namespace FCCH.Managers
                 .Sum(x => _configuration.LeaveOneItemPerStack && x.Quantity > 0 ? (long)x.Quantity - 1 : x.Quantity);
         }
 
-        public string GetItemName(uint itemId)
-        {
-            try
-            {
-                var sheet = Plugin.Data.GetExcelSheet<Item>();
-                if (sheet == null) return $"Item #{itemId}";
-                var row = sheet.GetRowOrDefault(itemId);
-                return row != null ? row.Value.Name.ToString() : $"Item #{itemId}";
-            }
-            catch { return $"Item #{itemId}"; }
-        }
+        public string GetItemName(uint itemId) => Common.ItemNames.Get(itemId);
         
         public void WithdrawMaterials(Dictionary<uint, int> items) => _commandHandler.WithdrawMaterials(items);
         public void DepositMaterials(Dictionary<uint, int> items) => _commandHandler.DepositMaterials(items);
@@ -483,11 +460,6 @@ namespace FCCH.Managers
             ChatHelper.Debug(msg);
             
             Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
-        }
-
-        public void VerboseLog(string msg)
-        {
-            ChatHelper.Verbose(msg);
         }
 
         public void Dispose()

@@ -169,8 +169,8 @@ namespace FCCH.Managers.Gil
 
         private void SwitchToGilTab()
         {
-            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            if (addon == null || !addon->IsVisible) return;
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null) return;
 
             Callback.Fire(addon, true, 2);
         }

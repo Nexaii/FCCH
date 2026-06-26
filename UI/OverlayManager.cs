@@ -6,6 +6,7 @@ using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using FCCH.Common;
@@ -35,7 +36,7 @@ namespace FCCH.UI
             _configuration = configuration;
             _orgService = orgService;
 
-            _toolbarWindow = new ToolbarWindow(helper, configuration);
+            _toolbarWindow = new ToolbarWindow(helper, configuration, orgService);
             _stopWindow = new StopWindow(helper, orgService);
 
             windowSystem.AddWindow(_toolbarWindow);
@@ -44,15 +45,15 @@ namespace FCCH.UI
 
         public unsafe void Update()
         {
-            var addon = _gameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
-            if (addon == null || !addon->IsVisible)
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null)
             {
                 _toolbarWindow.IsOpen = false;
                 _stopWindow.IsOpen = false;
                 return;
             }
 
-            bool isOperationActive = _helper.IsUserOperationActive || _orgService.JobStatus == OrgJobStatus.Running;
+            bool isOperationActive = _helper.IsUserOperationActive || _orgService.JobStatus == OrgJobStatus.Running || _orgService.IsSortRunning || _orgService.IsMergeRunning;
 
             _toolbarWindow.UpdateMoveFlag();
 
@@ -122,6 +123,7 @@ namespace FCCH.UI
     {
         private readonly ChestHelper _helper;
         private readonly Configuration _configuration;
+        private readonly OrgService _orgService;
 
         private bool _showDepositConfirm = false;
         private bool _showWithdrawConfirm = false;
@@ -133,11 +135,15 @@ namespace FCCH.UI
 
         private bool _depositMenuOpen = false;
         private bool _withdrawMenuOpen = false;
+        private bool _sortMenuOpen = false;
         private Vector2 _depositMenuAnchor;
         private Vector2 _withdrawMenuAnchor;
+        private Vector2 _sortMenuAnchor;
+        private InventoryType _sortMenuPage = InventoryType.Invalid;
 
         private const string DepositPopupId = "##DepositPopup";
         private const string WithdrawPopupId = "##WithdrawPopup";
+        private const string SortPopupId = "##SortPopup";
 
         private static readonly Vector2 SubmenuItemSize = new(160, 22);
         private const float SubmenuItemSpacingY = 6f;
@@ -148,10 +154,11 @@ namespace FCCH.UI
 
         public float LastHeight { get; private set; }
 
-        public ToolbarWindow(ChestHelper helper, Configuration configuration) : base("FCCH Toolbar", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing)
+        public ToolbarWindow(ChestHelper helper, Configuration configuration, OrgService orgService) : base("FCCH Toolbar", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoFocusOnAppearing)
         {
             _helper = helper;
             _configuration = configuration;
+            _orgService = orgService;
             RespectCloseHotkey = false;
             UpdateMoveFlag();
         }
@@ -228,6 +235,14 @@ namespace FCCH.UI
                 case ToolbarButtonId.WithdrawWorkshop:
                     DrawIconButton(FontAwesomeIcon.ListUl, "Workshop", ActionTooltip("Withdraw Workshop List", gate),
                         onClick: () => RequestWithdraw("Withdraw Workshop List?", () => _helper.WithdrawWorkshopItems()));
+                    break;
+                case ToolbarButtonId.Sort:
+                    DrawSplitButtonWithDropdown(
+                        FontAwesomeIcon.Sort, "SortMenu",
+                        ActionTooltip(SortTooltip(ResolveCurrentItemPage()), gate),
+                        ref _sortMenuOpen, ref _sortMenuAnchor, SortPopupId,
+                        () => DrawSortMenuItems(gate),
+                        onOpen: () => _sortMenuPage = ResolveCurrentItemPage());
                     break;
             }
 
@@ -308,7 +323,8 @@ namespace FCCH.UI
             ref bool openFlag,
             ref Vector2 anchor,
             string popupId,
-            Action drawItems)
+            Action drawItems,
+            Action? onOpen = null)
         {
             var cursorScreen = ImGui.GetCursorScreenPos();
             var pendingAnchor = new Vector2(cursorScreen.X, cursorScreen.Y + ImGui.GetFrameHeight() + SubmenuGap);
@@ -319,6 +335,7 @@ namespace FCCH.UI
             {
                 anchor = pendingAnchor;
                 openFlag = true;
+                onOpen?.Invoke();
                 ImGui.OpenPopup(popupId);
             }
 
@@ -383,6 +400,53 @@ namespace FCCH.UI
             }
 
             if (!gate.CanRun) ImGui.EndDisabled();
+        }
+
+        private unsafe InventoryType ResolveCurrentItemPage()
+        {
+            var addon = Common.ChestAddon.GetOpen();
+            if (addon == null) return InventoryType.Invalid;
+
+            var page = _helper.ChestManager.GetCurrentFCPage(addon);
+            return OrgService.IsItemPage(page) ? page : InventoryType.Invalid;
+        }
+
+        private static string SortTooltip(InventoryType page)
+        {
+            if (!OrgService.IsItemPage(page))
+                return "Open an item tab to sort or merge. Use the Organizer to move across tabs.";
+
+            int n = (int)(page - InventoryType.FreeCompanyPage1) + 1;
+            return $"Sort or merge Tab {n}. Use the Organizer to move across tabs.";
+        }
+
+        private void DrawSortMenuItems(ActionGateResult gate)
+        {
+            bool pageOk = OrgService.IsItemPage(_sortMenuPage);
+            if (!gate.CanRun || !pageOk) ImGui.BeginDisabled();
+
+            DrawSortOption("Sort by Category", OrgSortOrder.ByCategory);
+            DrawSortOption("Sort by ID", OrgSortOrder.ById);
+            DrawSortOption("Sort by Name", OrgSortOrder.ByName);
+            DrawSortOption("Sort by Quantity", OrgSortOrder.ByQuantity);
+
+            ImGui.Separator();
+
+            if (ImGui.Selectable("Merge Stacks", false, ImGuiSelectableFlags.None, SubmenuItemSize))
+            {
+                var page = _sortMenuPage;
+                _helper.TryStartUserAction(() => _orgService.RunMerge(page));
+            }
+
+            if (!gate.CanRun || !pageOk) ImGui.EndDisabled();
+        }
+
+        private void DrawSortOption(string label, OrgSortOrder order)
+        {
+            if (!ImGui.Selectable(label, false, ImGuiSelectableFlags.None, SubmenuItemSize)) return;
+
+            var page = _sortMenuPage;
+            _helper.TryStartUserAction(() => _orgService.RunSort(page, order, false, new() { OrgFilterCategory.AllItems }));
         }
 
         private void RequestDeposit(string message, Action action)
@@ -485,6 +549,8 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGuiColors.DalamudRed);
             if (ImGui.Button("Stop"))
             {
+                _orgService.CancelSort();
+                _orgService.CancelMerge();
                 _helper.Stop();
             }
             ImGui.PopStyleColor(2);

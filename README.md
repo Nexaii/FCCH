@@ -8,8 +8,8 @@
   </p>
 <p align="center">
     <img src="https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json&query=$[0].DownloadCount&label=Downloads&color=blue&style=for-the-badge" alt="Downloads" />
-    <a href="https://ko-fi.com/nexai">
-    <img src="https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Ko-fi" />
+    <a href="https://www.patreon.com/cw/Nexairi">
+    <img src="https://img.shields.io/badge/Support%20on-Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Patreon" />
 </a>
 </p>
 
@@ -32,20 +32,26 @@
 - **Custom List** - Saved deposit/withdraw item lists for repeat tasks (ceruleum, repair kits, etc.).
 - **Workshop** - Pull exact materials for Company Workshop projects. Refreshes when the project list changes.
 - **Crystals** - Deposit/withdraw shards/crystals/clusters with configurable keep amounts.
-- **Gil** - Deposit/withdraw with shorthand amounts (`5k`, `1m`, `all`).
+- **Gil** - Deposit/withdraw with shorthand amounts (`5k`, `1m`, `all`). Optional auto-deposit by percentage or fixed amount with an `always keep` floor.
+- **Lower Quality on Deposit** - Optionally convert HQ items to NQ as they deposit.
 
 ### Organizer
 - **Move** - Transfer items between FC chest tabs with filters.
 - **Sort** - Reorder items within a tab by category, ID, name, or quantity.
+- **Merge** - Combine partial stacks of the same item within a tab.
 
 ### Toolbar
 - **Dropdowns** - Deposit/Withdraw split-buttons expose tabs 1-5 inline.
 - **Crystal Button** - Left click deposits crystals, right click withdraws.
+- **Customizable Buttons** - Show or hide each toolbar button, lock position, snap to grid.
 
 ### Utilities
+- **Chest Search** - Search bar on the FC chest window filters visible items by name. Optional controller focus.
+- **Fast Move** - Hold a modifier key (default Ctrl) and right-click an item to move a full stack instantly, skipping the quantity prompt. Also hold a number key (1-5) to pick the destination FC tab, otherwise the open tab is used.
 - **Ignore List** - Exclude items from operations. Supports presets.
 - **Crystal Config** - Global or per crystal keep amounts.
 - **Leave One per Stack** - Reserve slots so a stack always remains in your inventory.
+- **Completion Sound** - Optional sound when an operation finishes, with custom sound file support.
 - **Export/Import** - Share lists via clipboard.
 - **Item Context Menu** - Right-click any inventory item to add or remove from Custom or Ignore list. Toggleable.
 - **Compact Item Names** - Shortens materia, grade, and level item names in lists. Original names still used for sorting, search, IPC, and chest operations.
@@ -66,6 +72,7 @@
 | `/fcch gd <amount>` | Deposit Gil |
 | `/fcch gw <amount>` | Withdraw Gil |
 | `/fcch info` | Show FC rank, permissions, and tab access |
+| `/fcch help` | List the deposit, withdraw, gil, and info commands |
 
 > **Amount Shorthand:** Gil commands accept raw numbers (`5000`), thousands (`5k`, `15k`), or millions (`1m`, `2.5m`).
 

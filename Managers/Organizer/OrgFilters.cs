@@ -172,15 +172,7 @@ namespace FCCH.Managers.Organizer
             };
         }
 
-        private static string GetItemName(uint itemId)
-        {
-            try
-            {
-                var sheet = Plugin.Data.GetExcelSheet<Item>();
-                return sheet?.GetRowOrDefault(itemId)?.Name.ToString() ?? "";
-            }
-            catch { return ""; }
-        }
+        private static string GetItemName(uint itemId) => Common.ItemNames.Get(itemId);
 
         public static string GetCategoryName(uint itemId)
         {
