@@ -16,7 +16,7 @@ namespace FCCH.Managers
         public Queue<MoveOperation> MoveQueue { get; private set; } = new();
         private readonly HashSet<(InventoryType, uint, InventoryType, uint, uint)> _queuedOps = new();
 
-        public DateTime LastActionTime { get; private set; } = DateTime.MinValue;
+        public long LastActionMs { get; private set; }
         public bool IsProcessing => MoveQueue.Count > 0;
         public bool ProcessedThisFrame { get; private set; } = false;
         public bool SuppressCompletionSound { get; set; } = false;
@@ -50,16 +50,16 @@ namespace FCCH.Managers
                 if (Plugin.SigScanner.TryScanText(InvManagerMoveItemSig, out var ptr))
                 {
                     _invManagerMoveItem = Marshal.GetDelegateForFunctionPointer<InventoryManagerMoveItemDelegate>(ptr);
-                    FCCH.Common.FCCHLog.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
+                    FCCHLog.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
                 }
                 else
                 {
-                    FCCH.Common.FCCHLog.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
+                    FCCHLog.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
                 }
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
+                FCCHLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
             }
         }
 
@@ -77,7 +77,7 @@ namespace FCCH.Managers
             ProcessedThisFrame = false;
             if (MoveQueue.Count == 0) return;
 
-            if ((DateTime.Now - LastActionTime).TotalMilliseconds < _configuration.MoveDelayInMs) return;
+            if (Environment.TickCount64 - LastActionMs < _configuration.MoveDelayInMs) return;
 
             if (Common.InventoryOpGate.HasPendingOperation()) return;
 
@@ -95,7 +95,7 @@ namespace FCCH.Managers
             if (_blockedTabs.Contains(guardTab))
             {
                 SkippedByBlockCount++;
-                LastActionTime = DateTime.Now;
+                LastActionMs = Environment.TickCount64;
                 EmitBatchSummaryIfDrained();
                 return;
             }
@@ -141,7 +141,7 @@ namespace FCCH.Managers
                             newQueue.Enqueue(MoveQueue.Dequeue());
                         MoveQueue = newQueue;
                         
-                        LastActionTime = DateTime.Now;
+                        LastActionMs = Environment.TickCount64;
                         return;
                     }
                 }
@@ -177,13 +177,13 @@ namespace FCCH.Managers
                 {
                     NoteSuccess(guardTab);
                 }
-                LastActionTime = DateTime.Now;
+                LastActionMs = Environment.TickCount64;
                 ProcessedThisFrame = true;
                 EmitBatchSummaryIfDrained();
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
+                FCCHLog.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
                 DebugLog($"[Error] Move failed: {ex.Message}");
                 EmitBatchSummaryIfDrained();
             }
@@ -207,7 +207,7 @@ namespace FCCH.Managers
 
             if (op.IsNativeMove)
             {
-                FCCH.Common.FCCHLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
+                FCCHLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
                 return false;
             }
 
@@ -230,8 +230,7 @@ namespace FCCH.Managers
         private void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            FCCH.Common.FCCHLog.Info(msg);
-            Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
+            FCCHLog.Info(msg);
         }
         
         public void Clear()

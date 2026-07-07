@@ -6,6 +6,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
+using FCCH.Common;
 using FCCH.GameData;
 using FCCH.IPC;
 using FCCH.UI;
@@ -100,7 +101,10 @@ namespace FCCH.UI
                     Verb = string.Empty,
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                FCCHLog.Warning($"[SettingsWindow] Failed to open donate link: {ex.Message}");
+            }
         }
 
         private void ToggleSettingsLock()

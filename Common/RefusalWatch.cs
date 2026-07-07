@@ -9,19 +9,33 @@ namespace FCCH.Common
 {
     public unsafe class RefusalWatch : IDisposable
     {
-        private static readonly string[] RefusalKeywords =
+        private static readonly HashSet<uint> PinnedRefusalLogMessageIds = new()
         {
-            "Unable to store",
-            "Unable to retrieve",
-            "Unable to deposit",
-            "Unable to withdraw",
-            "FC chest is full",
-            "company chest is full",
-            "free company chest is full",
-            "Unique, untradable, or bound items cannot be stored in the company chest",
+            1860, // Unable to obtain company chest data.
+            1861, // Unable to complete company chest action.
+            1862, // Unable to access company chest. You are not a member of this free company.
+            1863, // The company chest is inaccessible at this time.
+            1865, // Equipped items cannot be stored in the company chest.
+            1866, // Unique, untradable, or bound items cannot be stored in the company chest.
+            1867, // Unable to store item.
+            1869, // Unable to store item. The stack contained in the chest is full.
+            1870, // Unable to retrieve item. The stack in your inventory is full.
+            1871, // The company chest can hold no more gil.
+            1873, // Unable to store item. Another player is using the chest.
+            1874, // Unable to retrieve item. Another player is using the chest.
+            3145, // Company chest access is currently restricted.
+            3490, // Insufficient space in inventory. Unable to retrieve item.
+            4315, // Glamoured items cannot be stored in the company chest.
         };
 
-        private readonly HashSet<uint> _refusalLogIds = new();
+        private static readonly string[] DiscoveryKeywords =
+        {
+            "company chest",
+            "Unable to store item",
+            "Unable to retrieve item",
+        };
+
+        private readonly HashSet<uint> _refusalLogIds = new(PinnedRefusalLogMessageIds);
         private bool _initialized;
 
         public DateTime LastRefusalUtc { get; private set; } = DateTime.MinValue;
@@ -39,26 +53,25 @@ namespace FCCH.Common
         {
             try
             {
-                DiscoverRefusalLogIds();
+                DiscoverAdditionalRefusalLogIds();
                 InstallHooks();
-                _initialized = _refusalLogIds.Count > 0
-                               && (_hookShow != null || _hookShowUInt != null || _hookShowString != null);
+                _initialized = _hookShow != null || _hookShowUInt != null || _hookShowString != null;
 
                 if (!_initialized)
                 {
-                    FCCH.Common.FCCHLog.Warning("[RefusalWatch] Not initialized. ids=" + _refusalLogIds.Count
-                        + " hooks=" + (_hookShow != null ? "S" : "-")
+                    FCCHLog.Warning("[RefusalWatch] Not initialized. hooks="
+                        + (_hookShow != null ? "S" : "-")
                         + (_hookShowUInt != null ? "U" : "-")
                         + (_hookShowString != null ? "T" : "-"));
                 }
                 else
                 {
-                    FCCH.Common.FCCHLog.Info($"[RefusalWatch] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals.");
+                    FCCHLog.Info($"[RefusalWatch] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals ({PinnedRefusalLogMessageIds.Count} pinned).");
                 }
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Initialization failed.");
+                FCCHLog.Error(ex, "[RefusalWatch] Initialization failed.");
             }
         }
 
@@ -72,34 +85,43 @@ namespace FCCH.Common
             return false;
         }
 
-        private void DiscoverRefusalLogIds()
+        private void DiscoverAdditionalRefusalLogIds()
         {
-            var sheet = Plugin.Data.GetExcelSheet<LogMessage>();
+            var sheet = Plugin.Data.GetExcelSheet<LogMessage>(Dalamud.Game.ClientLanguage.English);
             if (sheet == null) return;
 
             foreach (var row in sheet)
             {
+                if (_refusalLogIds.Contains(row.RowId)) continue;
+
                 string text;
                 try { text = row.Text.ExtractText(); }
                 catch { continue; }
                 if (string.IsNullOrEmpty(text)) continue;
+                if (text.IndexOf("storeroom", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
-                foreach (var kw in RefusalKeywords)
+                foreach (var kw in DiscoveryKeywords)
                 {
-                    if (text.IndexOf(kw, StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        _refusalLogIds.Add(row.RowId);
-                        FCCH.Common.FCCHLog.Info($"[RefusalWatch] LogMessage#{row.RowId}: \"{text}\"");
-                        break;
-                    }
+                    if (text.IndexOf(kw, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (!LooksLikeRefusal(text)) break;
+
+                    _refusalLogIds.Add(row.RowId);
+                    FCCHLog.Warning($"[RefusalWatch] Unpinned refusal LogMessage#{row.RowId}: \"{text}\" (add to pinned set)");
+                    break;
                 }
             }
         }
 
+        private static bool LooksLikeRefusal(string text)
+            => text.IndexOf("Unable", StringComparison.OrdinalIgnoreCase) >= 0
+            || text.IndexOf("cannot", StringComparison.OrdinalIgnoreCase) >= 0
+            || text.IndexOf("restricted", StringComparison.OrdinalIgnoreCase) >= 0
+            || text.IndexOf("no more", StringComparison.OrdinalIgnoreCase) >= 0;
+
         private void InstallHooks()
         {
             var module = RaptureLogModule.Instance();
-            if (module == null) { FCCH.Common.FCCHLog.Warning("[RefusalWatch] RaptureLogModule.Instance() null."); return; }
+            if (module == null) { FCCHLog.Warning("[RefusalWatch] RaptureLogModule.Instance() null."); return; }
 
             try
             {
@@ -107,7 +129,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessage, OnShowLogMessage);
                 _hookShow?.Enable();
             }
-            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessage failed."); }
+            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessage failed."); }
 
             try
             {
@@ -115,7 +137,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageUInt, OnShowLogMessageUInt);
                 _hookShowUInt?.Enable();
             }
-            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageUInt failed."); }
+            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageUInt failed."); }
 
             try
             {
@@ -123,7 +145,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageString, OnShowLogMessageString);
                 _hookShowString?.Enable();
             }
-            catch (Exception ex) { FCCH.Common.FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageString failed."); }
+            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageString failed."); }
         }
 
         private void OnShowLogMessage(RaptureLogModule* thisPtr, uint logMessageId)

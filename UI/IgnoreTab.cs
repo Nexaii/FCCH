@@ -312,7 +312,7 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Export"))
             {
-                if (Common.ExportHelper.Export(Common.ExportHelper.HEADER_IGNORE, _helper.Configuration.IgnoreList))
+                if (Common.ExportHelper.Export(Common.ExportHelper.IgnoreListPrefix, _helper.Configuration.IgnoreList))
                 {
                     Common.ChatHelper.Info("Ignore list exported to clipboard.");
                 }
@@ -329,7 +329,7 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Import"))
             {
-                var (result, data) = Common.ExportHelper.Import<List<Configuration.IgnoredItem>>(Common.ExportHelper.HEADER_IGNORE);
+                var (result, data) = Common.ExportHelper.Import<List<Configuration.IgnoredItem>>(Common.ExportHelper.IgnoreListPrefix);
                 if (result == Common.ExportHelper.ImportResult.Success && data != null)
                 {
                     _helper.Configuration.IgnoreList = data;

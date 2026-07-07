@@ -66,7 +66,7 @@ namespace FCCH.Managers.Organizer
                 destItems = allPageItems
                     .Where(x => !sortedSlotKeys.Contains((x.Page, x.Slot)))
                     .ToList();
-                result.DestFreeSlots = (sourceIsPlayer ? Constants.PLAYER_INVENTORY_PAGE_SIZE * 4 : Constants.FC_CHEST_PAGE_SIZE) - destItems.Count;
+                result.DestFreeSlots = (sourceIsPlayer ? Constants.PlayerInventoryPageSize * 4 : Constants.FreeCompanyChestPageSize) - destItems.Count;
                 result.NetSlotsNeeded = sortedItems.Count;
             }
             else if (destIsPlayer)
@@ -80,7 +80,7 @@ namespace FCCH.Managers.Organizer
                 destItems = _chestManager.CachedItems
                     .Where(x => x.Page == request.DestTab)
                     .ToList();
-                result.DestFreeSlots = Constants.FC_CHEST_PAGE_SIZE - destItems.Count;
+                result.DestFreeSlots = Constants.FreeCompanyChestPageSize - destItems.Count;
                 result.NetSlotsNeeded = CalculateNetSlotsNeeded(sortedItems, destItems);
             }
 
@@ -204,7 +204,10 @@ namespace FCCH.Managers.Organizer
                             var row = sheet?.GetRowOrDefault(item->ItemId);
                             if (row != null) maxStack = row.Value.StackSize;
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            FCCHLog.Debug($"[OrgValidator] StackSize lookup failed for item {item->ItemId}, using 999: {ex.Message}");
+                        }
 
                         items.Add(new ChestManager.ScannedSlot
                         {
@@ -271,7 +274,7 @@ namespace FCCH.Managers.Organizer
                 while (remaining > 0)
                 {
                     uint nextSlot = 0;
-                    for (uint s = 0; s < Constants.FC_CHEST_PAGE_SIZE; s++)
+                    for (uint s = 0; s < Constants.FreeCompanyChestPageSize; s++)
                     {
                         if (!virtualDest.Any(d => d.Slot == s))
                         {
@@ -467,7 +470,7 @@ namespace FCCH.Managers.Organizer
                 while (remaining > 0)
                 {
                     uint nextSlot = 0;
-                    for (uint s = 0; s < Constants.FC_CHEST_PAGE_SIZE; s++)
+                    for (uint s = 0; s < Constants.FreeCompanyChestPageSize; s++)
                     {
                         if (!virtualDest.Any(d => d.Slot == s))
                         {
@@ -544,7 +547,7 @@ namespace FCCH.Managers.Organizer
         {
             foreach (var type in types)
             {
-                for (uint i = 0; i < Constants.PLAYER_INVENTORY_PAGE_SIZE; i++)
+                for (uint i = 0; i < Constants.PlayerInventoryPageSize; i++)
                 {
                     if (!slots.TryGetValue((type, i), out var slot)) continue;
                     if (slot.ItemId == itemId && slot.IsHq == isHq && slot.Quantity < maxStack)
@@ -554,7 +557,7 @@ namespace FCCH.Managers.Organizer
 
             foreach (var type in types)
             {
-                for (uint i = 0; i < Constants.PLAYER_INVENTORY_PAGE_SIZE; i++)
+                for (uint i = 0; i < Constants.PlayerInventoryPageSize; i++)
                 {
                     if (!slots.TryGetValue((type, i), out var slot)) continue;
                     if (slot.ItemId == 0)

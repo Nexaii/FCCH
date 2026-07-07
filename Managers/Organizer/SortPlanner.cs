@@ -76,13 +76,13 @@ namespace FCCH.Managers.Organizer
 
         private static SlotState[] BuildBoard(IReadOnlyList<ChestManager.ScannedSlot> tabSlots)
         {
-            var slots = new SlotState[Constants.FC_CHEST_PAGE_SIZE];
+            var slots = new SlotState[Constants.FreeCompanyChestPageSize];
             for (var i = 0; i < slots.Length; i++)
                 slots[i] = new SlotState();
 
             foreach (var s in tabSlots)
             {
-                if (s.Slot >= Constants.FC_CHEST_PAGE_SIZE) continue;
+                if (s.Slot >= Constants.FreeCompanyChestPageSize) continue;
                 var dst = slots[s.Slot];
                 dst.ItemId = s.ItemId;
                 dst.Quantity = s.Quantity;

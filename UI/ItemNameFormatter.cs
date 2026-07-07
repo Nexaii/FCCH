@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Dalamud.Bindings.ImGui;
+using FCCH.Common;
 using Lumina.Excel.Sheets;
 
 namespace FCCH.UI
@@ -76,8 +77,9 @@ namespace FCCH.UI
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                FCCHLog.Debug($"[ItemNameFormatter] Materia name lookup failed for item {itemId}: {ex.Message}");
                 return false;
             }
 

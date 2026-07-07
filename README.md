@@ -7,7 +7,6 @@
     <a href="#installation">Installation</a> · <a href="#features">Features</a> · <a href="#commands">Commands</a> · <a href="#ipc">IPC</a>
   </p>
 <p align="center">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/repo.json&query=$[0].DownloadCount&label=Downloads&color=blue&style=for-the-badge" alt="Downloads" />
     <a href="https://www.patreon.com/cw/Nexairi">
     <img src="https://img.shields.io/badge/Support%20on-Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Patreon" />
 </a>
@@ -47,7 +46,7 @@
 
 ### Utilities
 - **Chest Search** - Search bar on the FC chest window filters visible items by name. Optional controller focus.
-- **Fast Move** - Hold a modifier key (default Ctrl) and right-click an item to move a full stack instantly, skipping the quantity prompt. Also hold a number key (1-5) to pick the destination FC tab, otherwise the open tab is used.
+- **Fast Move** - Hold a modifier key (default Ctrl) and right-click an item to move a full stack instantly, skipping the quantity prompt. Also hold a number key (1-5) to pick the destination FC tab, otherwise the open tab is used. Works on crystals too: modifier + right-click a shard/crystal/cluster to deposit (from your inventory) or withdraw (from the chest) it. No number key needed for crystals.
 - **Ignore List** - Exclude items from operations. Supports presets.
 - **Crystal Config** - Global or per crystal keep amounts.
 - **Leave One per Stack** - Reserve slots so a stack always remains in your inventory.

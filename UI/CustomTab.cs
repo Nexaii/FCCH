@@ -393,7 +393,7 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Export"))
             {
-                if (Common.ExportHelper.Export(Common.ExportHelper.HEADER_SINGLES, _configuration.WithdrawItems))
+                if (Common.ExportHelper.Export(Common.ExportHelper.SinglesListPrefix, _configuration.WithdrawItems))
                 {
                     Common.ChatHelper.Info("Custom list exported to clipboard.");
                 }
@@ -410,7 +410,7 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Import"))
             {
-                var (result, data) = Common.ExportHelper.Import<List<WithdrawItem>>(Common.ExportHelper.HEADER_SINGLES);
+                var (result, data) = Common.ExportHelper.Import<List<WithdrawItem>>(Common.ExportHelper.SinglesListPrefix);
                 if (result == Common.ExportHelper.ImportResult.Success && data != null)
                 {
                     _configuration.WithdrawItems = data;

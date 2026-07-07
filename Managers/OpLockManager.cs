@@ -1,3 +1,4 @@
+using FCCH.Common;
 using System;
 using System.IO;
 using Dalamud.Hooking;
@@ -20,7 +21,7 @@ namespace FCCH.Managers
             _configuration = configuration;
             Plugin.GameInteropProvider.InitializeFromAttributes(this);
             _sendInventoryRefreshHook?.Enable();
-            FCCH.Common.FCCHLog.Info("[OpLockManager] Initialized and hook enabled.");
+            FCCHLog.Info("[OpLockManager] Initialized and hook enabled.");
         }
 
         private bool SendInventoryRefreshDetour(InventoryManager* instance, int inventoryType)
@@ -33,7 +34,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                try { FCCH.Common.FCCHLog.Error(e, "[OpLockManager] Detour body threw."); } catch { }
+                try { FCCHLog.Error(e, "[OpLockManager] Detour body threw."); } catch { }
             }
             return true;
         }
@@ -45,13 +46,12 @@ namespace FCCH.Managers
             string typeName = ((InventoryType)(uint)inventoryType).ToString();
 
             string msg = $"[OpLockManager] SendInventoryRefresh intercepted: type={inventoryType} ({typeName}) instance=0x{(nint)instance:X}";
-            FCCH.Common.FCCHLog.Info(msg);
-            FCCH.Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
+            FCCHLog.Info(msg);
         }
 
         public void Dispose()
         {
-            try { _sendInventoryRefreshHook?.Disable(); } catch (Exception e) { try { FCCH.Common.FCCHLog.Error(e, "[OpLockManager] Hook disable threw."); } catch { } }
+            try { _sendInventoryRefreshHook?.Disable(); } catch (Exception e) { try { FCCHLog.Error(e, "[OpLockManager] Hook disable threw."); } catch { } }
             _sendInventoryRefreshHook?.Dispose();
             _sendInventoryRefreshHook = null;
         }

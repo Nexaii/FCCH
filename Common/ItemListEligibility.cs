@@ -6,12 +6,6 @@ namespace FCCH.Common
 {
     internal static class ItemListEligibility
     {
-        private static readonly HashSet<string> AlwaysAllowedNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Ceruleum Tank",
-            "Magitek Repair Materials",
-        };
-
         public static bool TryGetAllowedItem(uint itemId, out Item item)
         {
             item = default;
@@ -30,12 +24,12 @@ namespace FCCH.Common
 
         public static bool IsAllowed(Item item)
         {
+            if (Constants.UntradableFcStorableItemIds.Contains(item.RowId))
+                return true;
+
             var name = item.Name.ToString();
             if (string.IsNullOrWhiteSpace(name))
                 return false;
-
-            if (AlwaysAllowedNames.Contains(name))
-                return true;
 
             return !item.IsUntradable
                 && item.RowId != 1

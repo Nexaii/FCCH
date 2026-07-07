@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Dalamud.Game;
+using FCCH.Common;
 using Lumina.Excel.Sheets;
 
 namespace FCCH.UI
@@ -94,8 +95,9 @@ namespace FCCH.UI
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    FCCHLog.Error(ex, "[CompactItemNameFamilyRegistry] Rule rebuild failed.");
                 }
 
                 rules = nextRules;
@@ -139,8 +141,9 @@ namespace FCCH.UI
             {
                 return Plugin.Data.GetExcelSheet<Item>(language)?.GetRowOrDefault(itemId)?.Name.ToString() ?? string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
+                FCCHLog.Debug($"[CompactItemNameFamilyRegistry] Localized name lookup failed for item {itemId}: {ex.Message}");
                 return string.Empty;
             }
         }

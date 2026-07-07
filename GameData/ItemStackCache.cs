@@ -1,3 +1,4 @@
+using FCCH.Common;
 using System;
 using System.Collections.Concurrent;
 using Lumina.Excel.Sheets;
@@ -30,7 +31,7 @@ namespace FCCH.GameData
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
+                FCCHLog.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
             }
             return DefaultMaxStack;
         }

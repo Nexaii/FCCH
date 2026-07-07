@@ -30,7 +30,7 @@ namespace FCCH.Managers
 
             if (preferredPage.HasValue && availableTabs.Contains(preferredPage.Value))
             {
-                for (int i = 0; i < Constants.FC_CHEST_PAGE_SIZE; i++)
+                for (int i = 0; i < Constants.FreeCompanyChestPageSize; i++)
                 {
                     if (!occupiedSlots.Contains((preferredPage.Value, i)))
                     {
@@ -45,7 +45,7 @@ namespace FCCH.Managers
             {
                 if (preferredPage.HasValue && page == preferredPage.Value) continue;
 
-                for (int i = 0; i < Constants.FC_CHEST_PAGE_SIZE; i++)
+                for (int i = 0; i < Constants.FreeCompanyChestPageSize; i++)
                 {
                     if (!occupiedSlots.Contains((page, i)))
                     {
@@ -150,7 +150,7 @@ namespace FCCH.Managers
                     }
                     catch (Exception ex)
                     {
-                        FCCH.Common.FCCHLog.Warning($"[Deposit] IsUntradable lookup failed for Item#{item->ItemId}: {ex.Message}");
+                        FCCHLog.Warning($"[Deposit] IsUntradable lookup failed for Item#{item->ItemId}: {ex.Message}");
                     }
 
                     if (isUntradable) continue;
@@ -349,7 +349,7 @@ namespace FCCH.Managers
                             {
                                 if (remainingToDeposit == 0) break;
 
-                                for (uint s = 0; s < Constants.FC_CHEST_PAGE_SIZE; s++)
+                                for (uint s = 0; s < Constants.FreeCompanyChestPageSize; s++)
                                 {
                                     if (remainingToDeposit == 0) break;
 
@@ -407,7 +407,8 @@ namespace FCCH.Managers
             InventoryType[] playerInvTypes,
             bool ignoreLeaveOneRule = false,
             InventoryType? sourcePageFilter = null,
-            IReadOnlySet<InventoryType>? sourcePages = null)
+            IReadOnlySet<InventoryType>? sourcePages = null,
+            uint? sourceSlotFilter = null)
         {
             var moves = new List<MoveOperation>();
             LastWithdrawOverflow.Clear();
@@ -442,7 +443,8 @@ namespace FCCH.Managers
                     .Where(x => x.ItemId == itemId)
                     .Where(x => sourcePageFilter == null || x.Page == sourcePageFilter)
                     .Where(x => sourcePages == null || sourcePages.Contains(x.Page))
-                    .OrderByDescending(x => x.Quantity)
+                    .Where(x => sourceSlotFilter == null || x.Slot == sourceSlotFilter)
+                    .OrderBy(x => x.Page).ThenBy(x => x.Slot)
                     .ToList();
 
                 foreach (var chestSlot in chestItems)
@@ -458,7 +460,7 @@ namespace FCCH.Managers
                     uint remainingFromThisSlot = (uint)Math.Min(amountNeeded, (int)availableFromSlot);
                     if (config.DebugMode)
                     {
-                        FCCH.Common.FCCHLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
+                        FCCHLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
                     }
 
                     while (remainingFromThisSlot > 0)
@@ -503,7 +505,7 @@ namespace FCCH.Managers
                 {
                     int overflow = amountNeeded > 0 ? amountNeeded : 0;
                     int queued = totalRequested - overflow;
-                    FCCH.Common.FCCHLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
+                    FCCHLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
                 }
             }
 
@@ -529,7 +531,7 @@ namespace FCCH.Managers
         {
             foreach (var type in types)
             {
-                for (uint i = 0; i < Constants.PLAYER_INVENTORY_PAGE_SIZE; i++)
+                for (uint i = 0; i < Constants.PlayerInventoryPageSize; i++)
                 {
                     var key = (type, i);
                     if (slots.TryGetValue(key, out var slot))
@@ -544,7 +546,7 @@ namespace FCCH.Managers
 
             foreach (var type in types)
             {
-                for (uint i = 0; i < Constants.PLAYER_INVENTORY_PAGE_SIZE; i++)
+                for (uint i = 0; i < Constants.PlayerInventoryPageSize; i++)
                 {
                     var key = (type, i);
                     if (slots.TryGetValue(key, out var slot))

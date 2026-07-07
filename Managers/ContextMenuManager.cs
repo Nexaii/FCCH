@@ -12,7 +12,7 @@ using Lumina.Excel.Sheets;
 
 namespace FCCH.Managers
 {
-    internal sealed unsafe class ContextMenu : IDisposable
+    internal sealed unsafe class ContextMenuManager : IDisposable
     {
         private const string ContextMenuAddonName = "ContextMenu";
 
@@ -22,7 +22,7 @@ namespace FCCH.Managers
         private readonly IKeyState keyState;
         private bool armClose;
 
-        public ContextMenu(IContextMenu contextMenu, Configuration configuration, ChestHelper chestHelper, IKeyState keyState)
+        public ContextMenuManager(IContextMenu contextMenu, Configuration configuration, ChestHelper chestHelper, IKeyState keyState)
         {
             this.contextMenu = contextMenu;
             this.configuration = configuration;
@@ -51,6 +51,20 @@ namespace FCCH.Managers
             if (!ModifierHeld())
                 return false;
 
+            if (TryResolvePlayerCrystal(args, out var crystalId))
+            {
+                chestHelper.ProcessCommand(() => chestHelper.CrystalMgr.DepositSingle(crystalId));
+                armClose = true;
+                return true;
+            }
+
+            if (TryResolveChestCrystal(args, out var chestCrystalId))
+            {
+                chestHelper.ProcessCommand(() => chestHelper.CrystalMgr.WithdrawSingle(chestCrystalId));
+                armClose = true;
+                return true;
+            }
+
             if (TryResolvePlayerSource(args, out var srcType, out var srcSlot))
             {
                 var destTab = ResolveDepositTab();
@@ -65,9 +79,9 @@ namespace FCCH.Managers
                 return true;
             }
 
-            if (TryResolveChestSource(args, out var srcPage, out var itemId, out var amount))
+            if (TryResolveChestSource(args, out var srcPage, out var chestSlot, out var itemId, out var amount))
             {
-                chestHelper.ProcessCommand(() => chestHelper.WithdrawItemStack(srcPage, itemId, amount));
+                chestHelper.ProcessCommand(() => chestHelper.WithdrawItemStack(srcPage, chestSlot, itemId, amount));
                 armClose = true;
                 return true;
             }
@@ -97,13 +111,14 @@ namespace FCCH.Managers
             return true;
         }
 
-        private bool TryResolveChestSource(IMenuOpenedArgs args, out InventoryType srcPage, out uint itemId, out int amount)
+        private bool TryResolveChestSource(IMenuOpenedArgs args, out InventoryType srcPage, out uint srcSlot, out uint itemId, out int amount)
         {
             srcPage = InventoryType.Invalid;
+            srcSlot = 0;
             itemId = 0;
             amount = 0;
 
-            if (args.AddonName != Constants.FC_CHEST_ADDON_NAME)
+            if (args.AddonName != Constants.FreeCompanyChestAddonName)
                 return false;
 
             var page = chestHelper.GetOpenChestPage();
@@ -119,8 +134,56 @@ namespace FCCH.Managers
                 return false;
 
             srcPage = page;
+            srcSlot = (uint)detail->Index;
             itemId = slot.Value.ItemId;
             amount = (int)slot.Value.Quantity;
+            return true;
+        }
+
+        private bool TryResolvePlayerCrystal(IMenuOpenedArgs args, out uint itemId)
+        {
+            itemId = 0;
+
+            var agent = AgentInventoryContext.Instance();
+            if (agent == null || args.AgentPtr != (nint)agent)
+                return false;
+
+            if (agent->TargetInventoryId != InventoryType.Crystals && agent->TargetInventoryId != InventoryType.FreeCompanyCrystals)
+                return false;
+
+            var source = agent->TargetInventorySlot;
+            if (source == null || source->ItemId == 0)
+                return false;
+
+            if (configuration.DebugMode)
+                FCCHLog.Info($"[FastMove] player crystal hover itemId={source->ItemId} container={agent->TargetInventoryId}");
+
+            itemId = source->ItemId;
+            return true;
+        }
+
+        private bool TryResolveChestCrystal(IMenuOpenedArgs args, out uint itemId)
+        {
+            itemId = 0;
+
+            if (args.AddonName != Constants.FreeCompanyChestAddonName)
+                return false;
+
+            if (chestHelper.GetOpenChestPage() != InventoryType.FreeCompanyCrystals)
+                return false;
+
+            var detail = AgentItemDetail.Instance();
+            if (detail == null || detail->ItemId == 0)
+                return false;
+
+            var slot = chestHelper.GetChestSlot(InventoryType.FreeCompanyCrystals, (int)detail->Index);
+            if (configuration.DebugMode)
+                FCCHLog.Info($"[FastMove] chest crystal hover detailItemId={detail->ItemId} detailIndex={detail->Index} slotItemId={slot?.ItemId ?? 0}");
+
+            if (slot == null || slot.Value.ItemId == 0 || slot.Value.ItemId != detail->ItemId)
+                return false;
+
+            itemId = slot.Value.ItemId;
             return true;
         }
 

@@ -102,10 +102,10 @@ namespace FCCH.Managers
         }
 
         private static bool CanDeposit(byte access)
-            => access == Constants.FCPermissions.FULL_ACCESS || access == Constants.FCPermissions.DEPOSIT_ONLY;
+            => access == Constants.FCPermissions.FullAccess || access == Constants.FCPermissions.DepositOnly;
 
         private static bool CanWithdraw(byte access)
-            => access == Constants.FCPermissions.FULL_ACCESS;
+            => access == Constants.FCPermissions.FullAccess;
 
         private static bool IsItemTab(InventoryType type)
             => type >= InventoryType.FreeCompanyPage1 && type <= InventoryType.FreeCompanyPage5;
@@ -125,8 +125,8 @@ namespace FCCH.Managers
 
             var access = _chestManager.GetChestAccess(tab);
             bool allowed = needWithdraw
-                ? access == Constants.FCPermissions.FULL_ACCESS
-                : access == Constants.FCPermissions.FULL_ACCESS || access == Constants.FCPermissions.DEPOSIT_ONLY;
+                ? access == Constants.FCPermissions.FullAccess
+                : access == Constants.FCPermissions.FullAccess || access == Constants.FCPermissions.DepositOnly;
 
             if (!allowed)
             {
@@ -192,12 +192,12 @@ namespace FCCH.Managers
                 ChatHelper.Info($"Nothing to deposit to Tab {tab}.");
         }
 
-        public void WithdrawItemStack(InventoryType srcPage, uint itemId, int amount)
+        public void WithdrawItemStack(InventoryType srcPage, uint srcSlot, uint itemId, int amount)
         {
             if (amount <= 0) return;
 
             int tab = ((int)srcPage - (int)InventoryType.FreeCompanyPage1) + 1;
-            if (_chestManager.GetChestAccess(srcPage) != Constants.FCPermissions.FULL_ACCESS)
+            if (_chestManager.GetChestAccess(srcPage) != Constants.FCPermissions.FullAccess)
             {
                 ChatHelper.Warning($"Tab {tab}: no withdraw permission.");
                 return;
@@ -210,7 +210,8 @@ namespace FCCH.Managers
             var moves = OperationManager.CalculateWithdrawMoves(
                 _chestManager, _configuration, requirements, PlayerInvTypes,
                 ignoreLeaveOneRule: false,
-                sourcePageFilter: srcPage);
+                sourcePageFilter: srcPage,
+                sourceSlotFilter: srcSlot);
 
             foreach (var move in moves)
             {

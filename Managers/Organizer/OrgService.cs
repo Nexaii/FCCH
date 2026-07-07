@@ -61,7 +61,7 @@ namespace FCCH.Managers.Organizer
             => tab >= InventoryType.FreeCompanyPage1 && tab <= InventoryType.FreeCompanyPage5;
 
         public bool CanSortTab(InventoryType tab)
-            => IsItemPage(tab) && _chestManager.GetChestAccess(tab) == Constants.FCPermissions.FULL_ACCESS;
+            => IsItemPage(tab) && _chestManager.GetChestAccess(tab) == Constants.FCPermissions.FullAccess;
 
         public OrgCheckResult CheckSort(InventoryType tab, OrgSortOrder order, bool descending, HashSet<OrgFilterCategory> filters)
         {
@@ -303,7 +303,7 @@ namespace FCCH.Managers.Organizer
         private void DebugLog(string msg)
         {
             if (!_config.DebugMode) return;
-            FCCH.Common.FCCHLog.Info($"[Organizer] {msg}");
+            FCCHLog.Info($"[Organizer] {msg}");
             Common.ChatHelper.Debug($"[Org] {msg}");
         }
 
@@ -392,7 +392,7 @@ namespace FCCH.Managers.Organizer
 
         public void Dispose()
         {
-            try { _executor.Cancel(); } catch { }
+            try { _executor.Cancel(); } catch (Exception ex) { FCCHLog.Error(ex, "[OrgService] Executor cancel during dispose threw."); }
             if (_sortActive) FinishSort(success: false);
             if (_mergeActive) FinishMerge(success: false);
             _executor.OnJobCompleted -= HandleJobCompleted;

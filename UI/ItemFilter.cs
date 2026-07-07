@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
+using FCCH.Common;
 using Dalamud.Plugin.Services;
 using Lumina.Excel.Sheets;
 
@@ -11,12 +12,6 @@ namespace FCCH.UI
         private readonly IDataManager _dataManager;
         
         private HashSet<uint> _craftableItemIds = new();
-
-        private static readonly HashSet<string> _alwaysIncludeNames = new(System.StringComparer.OrdinalIgnoreCase)
-        {
-            "Ceruleum Tank",
-            "Magitek Repair Materials",
-        };
 
         private List<Item> _filteredItems = new();
         
@@ -47,7 +42,7 @@ namespace FCCH.UI
 
                 bool isCraftable = _craftableItemIds.Contains(item.RowId);
                 bool isFcStorable = !item.IsUntradable;
-                bool isWhitelisted = _alwaysIncludeNames.Contains(item.Name.ToString());
+                bool isWhitelisted = Constants.UntradableFcStorableItemIds.Contains(item.RowId);
 
                 if ((isCraftable && isFcStorable) || isWhitelisted)
                 {

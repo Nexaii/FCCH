@@ -44,11 +44,50 @@ namespace FCCH.Managers
             return itemId - 2;
         }
 
+        public void DepositSingle(uint itemId)
+        {
+            if (!AllIds.Contains(itemId))
+            {
+                ChatHelper.Warning("Tab 6 holds crystals only.");
+                return;
+            }
+
+            var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals);
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
+            {
+                ChatHelper.Warning("No deposit permission on the crystals tab.");
+                return;
+            }
+
+            InvalidateCache();
+            if (!ProcessDeposit(itemId))
+                ChatHelper.Info("Nothing to deposit (at keep amount, none held, or tab full).");
+        }
+
+        public void WithdrawSingle(uint itemId)
+        {
+            if (!AllIds.Contains(itemId))
+            {
+                ChatHelper.Warning("Crystal withdraw: not a crystal.");
+                return;
+            }
+
+            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FullAccess)
+            {
+                ChatHelper.Warning("No withdraw permission on the crystals tab.");
+                return;
+            }
+
+            InvalidateCache();
+            if (!ProcessWithdraw(itemId))
+                ChatHelper.Info("Nothing to withdraw (player at 9999 or chest empty).");
+        }
+
         public void Deposit(bool force = false)
         {
             if (!force && !_configuration.CrystalConfig.IncludeInDepositAll) return;
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals);
-            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
                 ChatHelper.Info($"Skipping {(force ? "dc" : "da")} for crystals.");
                 return;
@@ -80,7 +119,7 @@ namespace FCCH.Managers
         public void Withdraw(bool force = false)
         {
             if (!force && !_configuration.CrystalConfig.IncludeInWithdrawAll) return;
-            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FULL_ACCESS)
+            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FullAccess)
             {
                 ChatHelper.Info($"Skipping {(force ? "wc" : "wa")} for crystals.");
                 return;
@@ -93,10 +132,10 @@ namespace FCCH.Managers
             }
         }
 
-        private void ProcessDeposit(uint itemId)
+        private bool ProcessDeposit(uint itemId)
         {
             var pCount = GetPlayerCount(itemId);
-            if (pCount == 0) return;
+            if (pCount == 0) return false;
 
             var keep = _configuration.CrystalConfig.GlobalKeepAmount;
             if (_configuration.CrystalConfig.CustomKeepAmounts.TryGetValue(itemId, out int custom))
@@ -104,15 +143,15 @@ namespace FCCH.Managers
                 keep = custom;
             }
 
-            if (pCount <= keep) return;
+            if (pCount <= keep) return false;
 
             var toMove = pCount - keep;
-            
+
             var fcCount = GetFCCount(itemId);
             var fcSpace = 9999 - fcCount;
 
             if (toMove > fcSpace) toMove = fcSpace;
-            if (toMove <= 0) return;
+            if (toMove <= 0) return false;
 
             _moveManager.Enqueue(new MoveOperation
             {
@@ -124,19 +163,20 @@ namespace FCCH.Managers
                 DstSlot = GetSlotForCrystal(itemId),
                 IsNativeMove = true
             });
+            return true;
         }
 
-        private void ProcessWithdraw(uint itemId)
+        private bool ProcessWithdraw(uint itemId)
         {
             var pCount = GetPlayerCount(itemId);
-            if (pCount >= 9999) return;
+            if (pCount >= 9999) return false;
 
             var needed = 9999 - pCount;
-            
+
             var fcCount = GetFCCount(itemId);
-            
+
             if (needed > fcCount) needed = fcCount;
-            if (needed <= 0) return;
+            if (needed <= 0) return false;
 
             _moveManager.Enqueue(new MoveOperation
             {
@@ -148,6 +188,7 @@ namespace FCCH.Managers
                 DstSlot = GetSlotForCrystal(itemId),
                 IsNativeMove = true
             });
+            return true;
         }
 
         private long GetPlayerCount(uint itemId)

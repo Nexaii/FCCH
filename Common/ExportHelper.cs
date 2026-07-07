@@ -9,9 +9,9 @@ namespace FCCH.Common
 {
     public static class ExportHelper
     {
-        public const string HEADER_IGNORE = "FCCH_IGN_";
-        public const string HEADER_SINGLES = "FCCH_SNG_";
-        public const string HEADER_WORKSHOP = "FCCH_WKS_";
+        public const string IgnoreListPrefix = "FCCH_IGN_";
+        public const string SinglesListPrefix = "FCCH_SNG_";
+        public const string WorkshopListPrefix = "FCCH_WKS_";
 
         public enum ImportResult
         {
@@ -34,7 +34,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error($"Export failed: {ex.Message}");
+                FCCHLog.Error($"Export failed: {ex.Message}");
                 return false;
             }
         }
@@ -67,7 +67,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error($"Import failed: {ex.Message}");
+                FCCHLog.Error($"Import failed: {ex.Message}");
                 return (ImportResult.ParseError, default);
             }
         }

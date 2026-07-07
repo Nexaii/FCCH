@@ -59,7 +59,7 @@ namespace FCCH.UI
 
         public void Update()
         {
-            var addon = (AtkUnitBase*)_gameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            var addon = (AtkUnitBase*)_gameGui.GetAddonByName<AtkUnitBase>(Constants.FreeCompanyChestAddonName, 1);
             if (!_configuration.SearchBarEnabled || addon == null || !addon->IsVisible || addon->RootNode == null)
             {
                 if (_filterActive && addon != null)
@@ -222,7 +222,7 @@ namespace FCCH.UI
                 return;
             _disposed = true;
 
-            var addon = (AtkUnitBase*)_gameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            var addon = (AtkUnitBase*)_gameGui.GetAddonByName<AtkUnitBase>(Constants.FreeCompanyChestAddonName, 1);
             if (_filterActive && addon != null && addon->IsVisible)
                 ApplyFilter(addon, InventoryType.Invalid, "");
 

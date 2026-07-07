@@ -15,7 +15,7 @@ namespace FCCH.Managers
         private readonly ChestManager _chestManager;
 
         private IndexingPhase _phase = IndexingPhase.Idle;
-        private DateTime _lastActionTime = DateTime.MinValue;
+        private long _lastActionMs;
         private InventoryType _targetPage = InventoryType.Invalid;
         private Queue<InventoryType> _queue = new();
         private bool _autoDumpAfterIndexing = false;
@@ -37,7 +37,7 @@ namespace FCCH.Managers
             _autoDumpAfterIndexing = autoDump;
             var tabs = _chestManager.GetAvailableTabs();
             var restricted = tabs
-                .Where(x => _chestManager.GetChestAccess(x) == Constants.FCPermissions.NO_ACCESS)
+                .Where(x => _chestManager.GetChestAccess(x) == Constants.FCPermissions.NoAccess)
                 .ToList();
 
             foreach (var tab in restricted)
@@ -68,7 +68,7 @@ namespace FCCH.Managers
         {
             if (_phase == IndexingPhase.Idle) return;
             if (addon == null) return;
-            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < _configuration.IndexingDelayInMs) return;
+            if (Environment.TickCount64 - _lastActionMs < _configuration.IndexingDelayInMs) return;
 
             bool isPassive = _targetPage == InventoryType.FreeCompanyGil || _targetPage == InventoryType.FreeCompanyCrystals;
 
@@ -79,7 +79,7 @@ namespace FCCH.Managers
                     _chestManager.SwitchToPage(addon, _targetPage);
                 }
                 _phase = IndexingPhase.Scanning;
-                _lastActionTime = DateTime.Now;
+                _lastActionMs = Environment.TickCount64;
             }
             else if (_phase == IndexingPhase.Scanning)
             {
@@ -93,7 +93,7 @@ namespace FCCH.Managers
                     {
                         _targetPage = _queue.Dequeue();
                         _phase = IndexingPhase.Switching;
-                        _lastActionTime = DateTime.Now;
+                        _lastActionMs = Environment.TickCount64;
                     }
                     else
                     {
@@ -102,15 +102,15 @@ namespace FCCH.Managers
 
                         if (_configuration.DebugMode)
                         {
-                            FCCH.Common.FCCHLog.Info("Scanned Content:");
-                            FCCH.Common.FCCHLog.Info(_chestManager.GetDebugContent());
+                            FCCHLog.Info("Scanned Content:");
+                            FCCHLog.Info(_chestManager.GetDebugContent());
                         }
 
                         OnIndexingComplete?.Invoke();
                         if (_autoDumpAfterIndexing) OnAutoDumpRequested?.Invoke();
                     }
                 }
-                else if ((DateTime.Now - _lastActionTime).TotalSeconds > _configuration.IndexingTimeoutSeconds)
+                else if (Environment.TickCount64 - _lastActionMs > _configuration.IndexingTimeoutSeconds * 1000L)
                 {
                     ChatHelper.Error("Indexing synchronization timed out. Please try again.");
                     _phase = IndexingPhase.Idle;
@@ -135,7 +135,7 @@ namespace FCCH.Managers
             var container = InventoryManager.Instance()->GetInventoryContainer(type);
             if (container == null)
             {
-                FCCH.Common.FCCHLog.Info($"[Diag] {type} container=NULL");
+                FCCHLog.Info($"[Diag] {type} container=NULL");
                 return;
             }
             int nonEmpty = 0;
@@ -149,7 +149,7 @@ namespace FCCH.Managers
                     nonEmpty++;
                 }
             }
-            FCCH.Common.FCCHLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
+            FCCHLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
         }
     }
 }

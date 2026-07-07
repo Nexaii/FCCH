@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace FCCH.Common
@@ -12,24 +13,27 @@ namespace FCCH.Common
             InventoryType.Inventory4,
         };
 
-        public const string FC_CHEST_ADDON_NAME = "FreeCompanyChest";
-        public const string INPUT_NUMERIC_ADDON_NAME = "InputNumeric";
+        public static readonly HashSet<uint> UntradableFcStorableItemIds = new()
+        {
+            10155, // Ceruleum Tank
+            10373, // Magitek Repair Materials
+        };
 
-        // Callback Indices
-        public const int FC_CHEST_CALLBACK_ID = 2;
-        public const int NUMERIC_INPUT_CALLBACK_IDX = 3;
+        public const string FreeCompanyChestAddonName = "FreeCompanyChest";
+        public const string InputNumericAddonName = "InputNumeric";
 
-        // FC Permission Levels (InfoProxyFreeCompany::RankData::ChestAccess)
+        public const int FreeCompanyChestCallbackId = 2;
+        public const int NumericInputCallbackIndex = 3;
+
         public static class FCPermissions
         {
-            public const byte NO_ACCESS = 1;
-            public const byte VIEW_ONLY = 2;
-            public const byte FULL_ACCESS = 4;
-            public const byte DEPOSIT_ONLY = 8;
+            public const byte NoAccess = 1;
+            public const byte ViewOnly = 2;
+            public const byte FullAccess = 4;
+            public const byte DepositOnly = 8;
         }
 
-        // Inventory Sizes
-        public const int FC_CHEST_PAGE_SIZE = 50;
-        public const int PLAYER_INVENTORY_PAGE_SIZE = 35;
+        public const int FreeCompanyChestPageSize = 50;
+        public const int PlayerInventoryPageSize = 35;
     }
 }

@@ -19,7 +19,7 @@ namespace FCCH.Managers
                    DetourName = nameof(FcBitsetSetterDetour), UseFlags = SignatureUseFlags.Hook)]
         private Hook<FcBitsetSetterDelegate>? _fcBitsetHook = null;
 
-        private static readonly InventoryType[] FC_ITEM_PAGES = {
+        private static readonly InventoryType[] FCItemPages = {
             InventoryType.FreeCompanyPage1,
             InventoryType.FreeCompanyPage2,
             InventoryType.FreeCompanyPage3,
@@ -27,7 +27,7 @@ namespace FCCH.Managers
             InventoryType.FreeCompanyPage5,
         };
 
-        private static readonly InventoryType[] FC_NON_ITEM = {
+        private static readonly InventoryType[] FCNonItemPages = {
             InventoryType.FreeCompanyGil,
             InventoryType.FreeCompanyCrystals,
         };
@@ -44,7 +44,7 @@ namespace FCCH.Managers
             }
             else
             {
-                FCCH.Common.FCCHLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
+                FCCHLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
                 DebugLog("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
             }
         }
@@ -74,7 +74,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                FCCH.Common.FCCHLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
+                FCCHLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
             }
 
             _fcBitsetHook!.Original(state, byteIndex, newByte);
@@ -107,7 +107,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                FCCH.Common.FCCHLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
+                FCCHLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
             }
         }
 
@@ -154,8 +154,8 @@ namespace FCCH.Managers
             return container->IsLoaded;
         }
 
-        private static bool IsFCItemPage(InventoryType type) => Array.IndexOf(FC_ITEM_PAGES, type) >= 0;
-        private static bool IsFCNonItem(InventoryType type) => Array.IndexOf(FC_NON_ITEM, type) >= 0;
+        private static bool IsFCItemPage(InventoryType type) => Array.IndexOf(FCItemPages, type) >= 0;
+        private static bool IsFCNonItem(InventoryType type) => Array.IndexOf(FCNonItemPages, type) >= 0;
 
         public InventoryContainer* GetContainer(InventoryType type)
         {
@@ -166,8 +166,7 @@ namespace FCCH.Managers
         private void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            FCCH.Common.FCCHLog.Info(msg);
-            Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
+            FCCHLog.Info(msg);
         }
     }
 }

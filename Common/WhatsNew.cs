@@ -2,26 +2,16 @@ namespace FCCH.Common
 {
     public static class WhatsNew
     {
-        public const int Revision = 1;
+        public const int Revision = 2;
 
         public readonly record struct Entry(string Title, string[] Details);
 
         public static readonly Entry[] Highlights =
         {
-            new("Chest Search", new[]
+            new("Fast Move: Crystals", new[]
             {
-                "Highlights matches in the open tab.",
-            }),
-            new("Fast Move", new[]
-            {
-                "Ctrl + right-click to deposit or withdraw.",
-                "Optionally hold keys 1-5 to pick the tab.",
-                "Example: Ctrl + 1 + right-click = tab 1.",
-            }),
-            new("Sort and Merge", new[]
-            {
-                "Toolbar Sort button sorts the open tab by category, ID, name, or quantity.",
-                "Or merge its stacks in place.",
+                "Modifier + right-click a crystal to deposit or withdraw it (default: Ctrl).",
+                "No number key needed. Deposits work from any open tab.",
             }),
         };
 

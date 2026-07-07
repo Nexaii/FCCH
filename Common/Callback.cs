@@ -23,11 +23,11 @@ namespace FCCH.Common
             {
                 var ptr = Plugin.SigScanner.ScanText(Sig);
                 FireCallback = Marshal.GetDelegateForFunctionPointer<AtkUnitBase_FireCallbackDelegate>(ptr);
-                FCCH.Common.FCCHLog.Info($"Initialized Callback module, FireCallback = 0x{ptr:X16}");
+                FCCHLog.Info($"Initialized Callback module, FireCallback = 0x{ptr:X16}");
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "Failed to initialize Callback module.");
+                FCCHLog.Error(ex, "Failed to initialize Callback module.");
             }
         }
 

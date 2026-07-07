@@ -30,7 +30,7 @@ namespace FCCH.Managers.Gil
             }
 
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
-            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
                 ChatHelper.Info("Skipping gd for gil.");
                 return;
@@ -54,7 +54,7 @@ namespace FCCH.Managers.Gil
             {
                 Amount = finalAmount,
                 IsDeposit = true,
-                Timestamp = DateTime.Now
+                TimestampMs = Environment.TickCount64
             });
 
             var bank = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("Bank", 1);
@@ -77,7 +77,7 @@ namespace FCCH.Managers.Gil
                 return;
             }
 
-            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyGil) != Constants.FCPermissions.FULL_ACCESS)
+            if (_chestManager.GetChestAccess(InventoryType.FreeCompanyGil) != Constants.FCPermissions.FullAccess)
             {
                 ChatHelper.Info("Skipping gw for gil.");
                 return;
@@ -101,7 +101,7 @@ namespace FCCH.Managers.Gil
             {
                 Amount = finalAmount,
                 IsDeposit = false,
-                Timestamp = DateTime.Now
+                TimestampMs = Environment.TickCount64
             });
 
             var moveOp = new MoveOperation
@@ -123,7 +123,7 @@ namespace FCCH.Managers.Gil
         {
             if (_configuration.GilMode == GilDepositMode.Disabled) return;
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
-            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY) return;
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly) return;
 
             uint amount = 0;
             uint playerGil = GilValidator.GetPlayerGil();
@@ -147,7 +147,7 @@ namespace FCCH.Managers.Gil
             {
                 Amount = validationResult.AdjustedAmount,
                 IsDeposit = true,
-                Timestamp = DateTime.Now
+                TimestampMs = Environment.TickCount64
             });
 
             var bank = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("Bank", 1);
@@ -180,6 +180,6 @@ namespace FCCH.Managers.Gil
     {
         public uint Amount;
         public bool IsDeposit;
-        public DateTime Timestamp;
+        public long TimestampMs;
     }
 }

@@ -3,7 +3,6 @@ using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Game;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
 using FCCH.IPC;
 using FCCH.Managers;
@@ -11,14 +10,11 @@ using FCCH.UI;
 using FCCH.GameData;
 using FCCH.Managers.Gil;
 using FCCH.Managers.Organizer;
-using System.Linq;
 
 namespace FCCH
 {
     public sealed class Plugin : IDalamudPlugin
     {
-        public string Name => "FCCH";
-
         [PluginService] public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
         [PluginService] public static ICommandManager CommandManager { get; private set; } = null!;
         [PluginService] public static IClientState ClientState { get; private set; } = null!;
@@ -30,7 +26,6 @@ namespace FCCH
         [PluginService] public static IPluginLog PluginLog { get; private set; } = null!;
         [PluginService] public static IChatGui Chat { get; private set; } = null!;
         [PluginService] public static ISigScanner SigScanner { get; private set; } = null!;
-        [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
         [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
         [PluginService] public static IContextMenu ContextMenu { get; private set; } = null!;
         [PluginService] public static IKeyState KeyState { get; private set; } = null!;
@@ -46,7 +41,7 @@ namespace FCCH
         private OpLockManager OpLockManager { get; init; }
         private GilManager GilManager { get; init; }
         private OrgService OrgService { get; init; }
-        private ContextMenu ItemContextMenu { get; init; }
+        private ContextMenuManager ItemContextMenu { get; init; }
         private WorkshoppaIPC WorkshoppaIPC { get; init; }
         private IPCProvider IPC { get; init; }
         private WhatsNewWindow WhatsNewWindow { get; init; }
@@ -74,7 +69,7 @@ namespace FCCH
             OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
             ChestHelper.ExternalOperationActive = () => OrgService.JobStatus == OrgJobStatus.Running;
             ChestHelper.CompanyChestClosedDuringOperation += OnCompanyChestClosedDuringOperation;
-            ItemContextMenu = new ContextMenu(Plugin.ContextMenu, Configuration, ChestHelper, KeyState);
+            ItemContextMenu = new ContextMenuManager(ContextMenu, Configuration, ChestHelper, KeyState);
             
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
             SearchBarManager = new SearchBarManager(ChestHelper, GameGui, KeyState, Configuration, WindowSystem);
@@ -245,6 +240,7 @@ namespace FCCH
                 case "gw":
                     ChestHelper.ProcessCommand(() => GilManager.HandleWithdrawCommand(parts.Length > 1 ? parts[1] : ""));
                     break;
+#if DEBUG
                 case "gildebug":
                     GilManager.EnableDebugMode();
                     break;
@@ -261,6 +257,7 @@ namespace FCCH
                 case "aprobe":
                     ChatHelper.Info(ChestHelper.DumpAccessProbe());
                     break;
+#endif
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();

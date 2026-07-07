@@ -33,7 +33,7 @@ namespace FCCH.Managers
 
             if (targetIndex == -1)
             {
-                FCCH.Common.FCCHLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
+                FCCHLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
                 return;
             }
 
@@ -43,7 +43,7 @@ namespace FCCH.Managers
             values[1].Type = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType.Int;
             values[1].Int = targetIndex;
 
-            addon->FireCallback((uint)Constants.FC_CHEST_CALLBACK_ID, values);
+            addon->FireCallback((uint)Constants.FreeCompanyChestCallbackId, values);
 
             if (targetPage != InventoryType.FreeCompanyGil)
             {
@@ -253,18 +253,18 @@ namespace FCCH.Managers
                     return MapAddonAccess(raw);
                 }
 
-                return Constants.FCPermissions.FULL_ACCESS;
+                return Constants.FCPermissions.FullAccess;
             }
-            catch { return Constants.FCPermissions.NO_ACCESS; }
+            catch { return Constants.FCPermissions.NoAccess; }
         }
 
         private static byte MapAddonAccess(uint raw) => raw switch
         {
-            0 => Constants.FCPermissions.NO_ACCESS,
-            1 => Constants.FCPermissions.VIEW_ONLY,
-            2 => Constants.FCPermissions.DEPOSIT_ONLY,
-            3 => Constants.FCPermissions.FULL_ACCESS,
-            _ => Constants.FCPermissions.NO_ACCESS,
+            0 => Constants.FCPermissions.NoAccess,
+            1 => Constants.FCPermissions.ViewOnly,
+            2 => Constants.FCPermissions.DepositOnly,
+            3 => Constants.FCPermissions.FullAccess,
+            _ => Constants.FCPermissions.NoAccess,
         };
 
         public static byte DecodeChestAccess(System.Span<byte> p, InventoryType page)
@@ -281,10 +281,10 @@ namespace FCCH.Managers
                 _ => 0
             };
 
-            if ((combined & Constants.FCPermissions.FULL_ACCESS)  != 0) return Constants.FCPermissions.FULL_ACCESS;
-            if ((combined & Constants.FCPermissions.DEPOSIT_ONLY) != 0) return Constants.FCPermissions.DEPOSIT_ONLY;
-            if ((combined & Constants.FCPermissions.VIEW_ONLY)    != 0) return Constants.FCPermissions.VIEW_ONLY;
-            return Constants.FCPermissions.NO_ACCESS;
+            if ((combined & Constants.FCPermissions.FullAccess)  != 0) return Constants.FCPermissions.FullAccess;
+            if ((combined & Constants.FCPermissions.DepositOnly) != 0) return Constants.FCPermissions.DepositOnly;
+            if ((combined & Constants.FCPermissions.ViewOnly)    != 0) return Constants.FCPermissions.ViewOnly;
+            return Constants.FCPermissions.NoAccess;
         }
 
         public void DumpRawPermissions(byte? overrideRank = null)
@@ -292,20 +292,20 @@ namespace FCCH.Managers
             try
             {
                 var uiModule = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
-                if (uiModule == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] UIModule null."); return; }
+                if (uiModule == null) { FCCHLog.Warning("[FCPerms] UIModule null."); return; }
 
                 var infoModule = uiModule->GetInfoModule();
-                if (infoModule == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] InfoModule null."); return; }
+                if (infoModule == null) { FCCHLog.Warning("[FCPerms] InfoModule null."); return; }
 
                 var fcProxy = (InfoProxyFreeCompany*)infoModule->GetInfoProxyById(InfoProxyId.FreeCompany);
-                if (fcProxy == null) { FCCH.Common.FCCHLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
+                if (fcProxy == null) { FCCHLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
 
                 byte playerRank = fcProxy->Rank;
-                FCCH.Common.FCCHLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
+                FCCHLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
 
                 if (overrideRank.HasValue)
                 {
-                    if (overrideRank.Value >= 14) { FCCH.Common.FCCHLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
+                    if (overrideRank.Value >= 14) { FCCHLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
                     DumpRankRow(fcProxy, overrideRank.Value, playerRank);
                     return;
                 }
@@ -314,7 +314,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[FCPerms] Dump failed.");
+                FCCHLog.Error(ex, "[FCPerms] Dump failed.");
             }
         }
 
@@ -324,7 +324,7 @@ namespace FCCH.Managers
             if (addon == null)
             {
                 const string closed = "[AccessProbe] Company Chest addon is not open.";
-                FCCH.Common.FCCHLog.Info(closed);
+                FCCHLog.Info(closed);
                 return closed;
             }
 
@@ -347,9 +347,7 @@ namespace FCCH.Managers
             uint tab5 = (packedItems >> 8) & 3;
 
             string message = $"[AccessProbe] mode={mode} selectedTab={selectedTab} page={page} packedItems=0x{packedItems:X8} tabs=[1:{tab1},2:{tab2},3:{tab3},4:{tab4},5:{tab5}] crystal={crystal} gil={gil} action={action} visibleMode={visibleMode} visibleMask=0x{visibleMask:X8} limitedMaskMode={limitedMaskMode}";
-            FCCH.Common.FCCHLog.Info(message);
-            if (_configuration.DebugMode)
-                DebugFileLogger.Enqueue(_configuration.DebugLogPath, message);
+            FCCHLog.Info(message);
             return message;
         }
 
@@ -361,7 +359,7 @@ namespace FCCH.Managers
             var hex = new System.Text.StringBuilder();
             for (int i = 0; i < 10; i++) hex.Append($" {(byte)p[i]:X2}");
 
-            FCCH.Common.FCCHLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
+            FCCHLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
 
             byte d1 = DecodeChestAccess(p, InventoryType.FreeCompanyPage1);
             byte d2 = DecodeChestAccess(p, InventoryType.FreeCompanyPage2);
@@ -371,16 +369,16 @@ namespace FCCH.Managers
             byte dc = DecodeChestAccess(p, InventoryType.FreeCompanyCrystals);
             byte dg = DecodeChestAccess(p, InventoryType.FreeCompanyGil);
 
-            FCCH.Common.FCCHLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
-            FCCH.Common.FCCHLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
+            FCCHLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
+            FCCHLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
         }
 
         public static string NameAccess(byte v) => v switch
         {
-            Constants.FCPermissions.NO_ACCESS => "No Access",
-            Constants.FCPermissions.VIEW_ONLY => "View Only",
-            Constants.FCPermissions.FULL_ACCESS => "Full Access",
-            Constants.FCPermissions.DEPOSIT_ONLY => "Deposit Only",
+            Constants.FCPermissions.NoAccess => "No Access",
+            Constants.FCPermissions.ViewOnly => "View Only",
+            Constants.FCPermissions.FullAccess => "Full Access",
+            Constants.FCPermissions.DepositOnly => "Deposit Only",
             _ => $"Unknown ({v})",
         };
 
@@ -436,7 +434,7 @@ namespace FCCH.Managers
             {
                 if (tab == InventoryType.FreeCompanyGil || tab == InventoryType.FreeCompanyCrystals) continue;
                 var access = GetChestAccess(tab);
-                if (access == Constants.FCPermissions.FULL_ACCESS || access == Constants.FCPermissions.DEPOSIT_ONLY)
+                if (access == Constants.FCPermissions.FullAccess || access == Constants.FCPermissions.DepositOnly)
                     result.Add(tab);
             }
             return result;
@@ -448,7 +446,7 @@ namespace FCCH.Managers
             foreach (var tab in GetAvailableTabs())
             {
                 if (tab == InventoryType.FreeCompanyGil || tab == InventoryType.FreeCompanyCrystals) continue;
-                if (GetChestAccess(tab) == Constants.FCPermissions.FULL_ACCESS)
+                if (GetChestAccess(tab) == Constants.FCPermissions.FullAccess)
                     result.Add(tab);
             }
             return result;
@@ -516,8 +514,9 @@ namespace FCCH.Managers
                         var name = sheet?.GetRowOrDefault(c.ItemId)?.Name.ToString() ?? $"Item#{c.ItemId}";
                         sb.AppendLine($"  - {name}: {c.Quantity:N0}");
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        FCCHLog.Debug($"[ChestManager] Crystal name lookup failed for item {c.ItemId}: {ex.Message}");
                         sb.AppendLine($"  - Item#{c.ItemId}: {c.Quantity:N0}");
                     }
                 }

@@ -54,9 +54,9 @@ namespace FCCH.Managers
 
         private System.Action? _pendingCommand;
         private bool _isWaitingForIndex = false;
-        private DateTime _indexingCompleteTime = DateTime.MinValue;
+        private long _indexingCompleteMs;
         private DateTime _pendingCommandQueuedAtUtc = DateTime.MinValue;
-        private const int EXECUTION_DELAY_MS = 2000;
+        private const int ExecutionDelayMs = 2000;
         private static readonly TimeSpan PendingCommandTimeout = TimeSpan.FromSeconds(15);
 
         public ChestHelper(Configuration configuration)
@@ -75,7 +75,7 @@ namespace FCCH.Managers
             Plugin.Framework.Update += OnUpdate;
             Callback.Initialize();
 
-            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, Constants.FC_CHEST_ADDON_NAME, OnChestOpened);
+            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, Constants.FreeCompanyChestAddonName, OnChestOpened);
 
             try
             {
@@ -84,7 +84,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[FCCH] Failed to start RefusalWatch.");
+                FCCHLog.Error(ex, "[FCCH] Failed to start RefusalWatch.");
             }
         }
 
@@ -120,7 +120,7 @@ namespace FCCH.Managers
                  if (_indexer.IsIdle && _isWaitingForIndex)
                  {
                      _isWaitingForIndex = false;
-                     _indexingCompleteTime = DateTime.Now;
+                     _indexingCompleteMs = Environment.TickCount64;
                  }
             }           
 
@@ -134,7 +134,7 @@ namespace FCCH.Managers
                 {
                     if (addon != null && addon->IsVisible)
                     {
-                        if ((DateTime.Now - _indexingCompleteTime).TotalMilliseconds >= EXECUTION_DELAY_MS)
+                        if (Environment.TickCount64 - _indexingCompleteMs >= ExecutionDelayMs)
                         {
                             var cmd = _pendingCommand;
                             _pendingCommand = null;
@@ -145,15 +145,15 @@ namespace FCCH.Managers
                 }
             }
             
-            if (IsProcessing || (DateTime.Now - MoveManager.LastActionTime).TotalSeconds < 2.0)
+            if (IsProcessing || Environment.TickCount64 - MoveManager.LastActionMs < 2000)
             {
                 var fcChest = Common.ChestAddon.GetOpen();
                 if (fcChest != null)
                 {
-                    var numeric = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.INPUT_NUMERIC_ADDON_NAME, 1);
+                    var numeric = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.InputNumericAddonName, 1);
                     if (numeric != null && numeric->IsVisible)
                     {
-                        Callback.Fire(numeric, true, (int)numeric->AtkValues[Constants.NUMERIC_INPUT_CALLBACK_IDX].UInt);
+                        Callback.Fire(numeric, true, (int)numeric->AtkValues[Constants.NumericInputCallbackIndex].UInt);
                     }
                 }
             }
@@ -215,7 +215,7 @@ namespace FCCH.Managers
             _pendingCommand = null;
             _isWaitingForIndex = false;
             _pendingCommandQueuedAtUtc = DateTime.MinValue;
-            _indexingCompleteTime = DateTime.MinValue;
+            _indexingCompleteMs = 0;
             _wasMoving = false;
             CompanyChestClosedDuringOperation?.Invoke();
             ChatHelper.Warning("FCCH stopped because the company chest was closed.");
@@ -263,8 +263,9 @@ namespace FCCH.Managers
                 if (ChestManager.GetFCRank() == 0) return true;
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                FCCHLog.Debug($"[ChestHelper] Availability check threw, treating as unavailable: {ex.Message}");
                 return true;
             }
         }
@@ -275,8 +276,9 @@ namespace FCCH.Managers
             {
                 return Common.ChestAddon.GetOpen() != null;
             }
-            catch
+            catch (Exception ex)
             {
+                FCCHLog.Debug($"[ChestHelper] Chest addon visibility check threw: {ex.Message}");
                 return false;
             }
         }
@@ -319,7 +321,7 @@ namespace FCCH.Managers
                 var chest = Plugin.ObjectTable.FirstOrDefault(x => x.Name.ToString().Equals("Company Chest", StringComparison.OrdinalIgnoreCase));
                 if (chest != null)
                 {
-                    FCCH.Common.FCCHLog.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
+                    FCCHLog.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
                     
                     var targetSystem = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
                     if (targetSystem != null)
@@ -337,7 +339,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                 FCCH.Common.FCCHLog.Error(ex, "Failed to interact with chest.");
+                 FCCHLog.Error(ex, "Failed to interact with chest.");
                  _pendingCommand = null;
                  _isWaitingForIndex = false;
                  _pendingCommandQueuedAtUtc = DateTime.MinValue;
@@ -363,7 +365,7 @@ namespace FCCH.Managers
         public void DepositToTab(int tab) => _commandHandler.DepositToTab(tab);
         public void WithdrawFromTab(int tab) => _commandHandler.WithdrawFromTab(tab);
         public void DepositItemToTab(InventoryType srcType, uint srcSlot, InventoryType destTab) => _commandHandler.DepositItemToTab(srcType, srcSlot, destTab);
-        public void WithdrawItemStack(InventoryType srcPage, uint itemId, int amount) => _commandHandler.WithdrawItemStack(srcPage, itemId, amount);
+        public void WithdrawItemStack(InventoryType srcPage, uint srcSlot, uint itemId, int amount) => _commandHandler.WithdrawItemStack(srcPage, srcSlot, itemId, amount);
 
         public InventoryType GetOpenChestPage()
         {
@@ -443,7 +445,7 @@ namespace FCCH.Managers
         private bool CanDeposit(InventoryType page)
         {
             var access = (byte)ChestManager.GetChestAccess(page);
-            return access == Constants.FCPermissions.DEPOSIT_ONLY || access == Constants.FCPermissions.FULL_ACCESS;
+            return access == Constants.FCPermissions.DepositOnly || access == Constants.FCPermissions.FullAccess;
         }
 
         public byte GetFCRank() => ChestManager.GetFCRank();
@@ -455,16 +457,13 @@ namespace FCCH.Managers
         public void DebugLog(string msg)
         {
             if (!_configuration.DebugMode) return;
-            FCCH.Common.FCCHLog.Info(msg);
-            
+            FCCHLog.Info(msg);
             ChatHelper.Debug(msg);
-            
-            Common.DebugFileLogger.Enqueue(_configuration.DebugLogPath, msg);
         }
 
         public void Dispose()
         {
-            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, Constants.FC_CHEST_ADDON_NAME, OnChestOpened);
+            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, Constants.FreeCompanyChestAddonName, OnChestOpened);
             Plugin.Framework.Update -= OnUpdate;
             _indexer.OnAutoDumpRequested -= _commandHandler.DepositAll;
             MoveManager.Dispose();
@@ -476,22 +475,16 @@ namespace FCCH.Managers
         {
             if (_indexer.IsIdle)
             {
-                FCCH.Common.FCCHLog.Info("[FCCH] Chest opened. Starting full scan...");
+                FCCHLog.Info("[FCCH] Chest opened. Starting full scan...");
 
                 ChestManager.ResetIndexingSession();
 
-                var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+                var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FreeCompanyChestAddonName, 1);
                 if (addon != null)
                 {
                     var current = ChestManager.GetCurrentFCPage(addon);
                     if (current != InventoryType.Invalid)
                         ChestManager.MarkInventoryObserved(current);
-                }
-
-                if (_configuration.DebugMode)
-                {
-                    DebugLog("Dumping Debug Info:");
-                    DebugLog(DebugEnums.GetDebugInfo());
                 }
 
                 StartIndexing(autoDump: false);

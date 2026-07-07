@@ -13,7 +13,6 @@ namespace FCCH.Managers.Gil
         private readonly Configuration _configuration;
         private readonly ChestManager _chestManager;
         private readonly GilExecutor _executor;
-        private const string INPUT_NUMERIC_ADDON = "InputNumeric";
 
         private bool _debugMode;
         private PendingGilTransaction? _pendingTransaction;
@@ -29,7 +28,7 @@ namespace FCCH.Managers.Gil
             _chestManager = chestManager;
             _executor = new GilExecutor(configuration, chestManager, moveManager, SetPendingTransaction);
 
-            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, INPUT_NUMERIC_ADDON, OnInputNumericSetup);
+            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, Constants.InputNumericAddonName, OnInputNumericSetup);
             Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "Bank", OnBankSetup);
         }
 
@@ -44,7 +43,7 @@ namespace FCCH.Managers.Gil
             if (pending == null) return;
 
             var transaction = pending.Value;
-            if ((DateTime.Now - transaction.Timestamp).TotalSeconds > 5)
+            if (Environment.TickCount64 - transaction.TimestampMs > 5000)
             {
                 _pendingTransaction = null;
                 return;
@@ -66,7 +65,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to handle InputNumeric");
+                FCCHLog.Error(ex, "[GilManager] Failed to handle InputNumeric");
                 _pendingTransaction = null;
             }
         }
@@ -78,7 +77,7 @@ namespace FCCH.Managers.Gil
 
             var transaction = pending.Value;
             if (!transaction.IsDeposit) return;
-            if ((DateTime.Now - transaction.Timestamp).TotalSeconds > 5)
+            if (Environment.TickCount64 - transaction.TimestampMs > 5000)
             {
                 _pendingTransaction = null;
                 return;
@@ -96,7 +95,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to handle Bank deposit");
+                FCCHLog.Error(ex, "[GilManager] Failed to handle Bank deposit");
                 _pendingTransaction = null;
             }
         }
@@ -108,12 +107,12 @@ namespace FCCH.Managers.Gil
             {
                 var ptr = Plugin.SigScanner.ScanText(Callback.Sig);
                 _fireCallbackHook = Plugin.GameInteropProvider.HookFromAddress<FireCallbackDelegate>(ptr, FireCallbackDetour);
-                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook resolved for FireCallback");
+                FCCHLog.Info("[GilManager] Debug hook resolved for FireCallback");
                 return true;
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to resolve debug hook");
+                FCCHLog.Error(ex, "[GilManager] Failed to resolve debug hook");
                 return false;
             }
         }
@@ -125,11 +124,11 @@ namespace FCCH.Managers.Gil
             try
             {
                 _fireCallbackHook.Enable();
-                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook enabled");
+                FCCHLog.Info("[GilManager] Debug hook enabled");
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to enable debug hook");
+                FCCHLog.Error(ex, "[GilManager] Failed to enable debug hook");
             }
         }
 
@@ -139,11 +138,11 @@ namespace FCCH.Managers.Gil
             try
             {
                 _fireCallbackHook.Disable();
-                FCCH.Common.FCCHLog.Info("[GilManager] Debug hook disabled");
+                FCCHLog.Info("[GilManager] Debug hook disabled");
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Failed to disable debug hook");
+                FCCHLog.Error(ex, "[GilManager] Failed to disable debug hook");
             }
         }
 
@@ -152,7 +151,7 @@ namespace FCCH.Managers.Gil
             try
             {
                 var addonName = addon->NameString;
-                if (_debugMode && (addonName == INPUT_NUMERIC_ADDON || addonName == FCCH.Common.Constants.FC_CHEST_ADDON_NAME || addonName == "Bank"))
+                if (_debugMode && (addonName == Constants.InputNumericAddonName || addonName == Constants.FreeCompanyChestAddonName || addonName == "Bank"))
                 {
                     ChatHelper.Info($"[DEBUG] {addonName} Callback Intercepted!");
                     ChatHelper.Info($"[DEBUG] valueCount={valueCount}, updateState={updateState}");
@@ -172,8 +171,11 @@ namespace FCCH.Managers.Gil
                     }
                 }
             }
-            catch { }
-            
+            catch (Exception ex)
+            {
+                FCCHLog.Error(ex, "[GilManager] FireCallbackDetour threw.");
+            }
+
             return _fireCallbackHook!.Original(addon, valueCount, values, updateState);
         }
 
@@ -218,7 +220,7 @@ namespace FCCH.Managers.Gil
             uint fcGil = GilValidator.GetFCGilHeader();
 
             var access = _chestManager.GetChestAccess(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.FreeCompanyGil);
-            if (access != Constants.FCPermissions.FULL_ACCESS && access != Constants.FCPermissions.DEPOSIT_ONLY)
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
                 ChatHelper.Info("Skipping gd for gil.");
                 return;
@@ -244,7 +246,7 @@ namespace FCCH.Managers.Gil
             uint playerGil = GilValidator.GetPlayerGil();
             uint fcGil = GilValidator.GetFCGilHeader(); 
 
-            if (_chestManager.GetChestAccess(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.FreeCompanyGil) != Constants.FCPermissions.FULL_ACCESS)
+            if (_chestManager.GetChestAccess(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.FreeCompanyGil) != Constants.FCPermissions.FullAccess)
             {
                 ChatHelper.Info("Skipping gw for gil.");
                 return;
@@ -283,13 +285,13 @@ namespace FCCH.Managers.Gil
                         return false;
                     }
                     amount = playerGil - alwaysKeep;
-                    uint fcRoom = GilValidator.MAX_GIL - fcGil;
+                    uint fcRoom = GilValidator.MaxGil - fcGil;
                     amount = Math.Min(amount, fcRoom);
                 }
                 else
                 {
                     amount = fcGil;
-                    uint playerRoom = GilValidator.MAX_GIL - playerGil;
+                    uint playerRoom = GilValidator.MaxGil - playerGil;
                     amount = Math.Min(amount, playerRoom);
                 }
                 return true;
@@ -326,9 +328,9 @@ namespace FCCH.Managers.Gil
                 return false;
             }
 
-            if (result < 1 || result > GilValidator.MAX_GIL)
+            if (result < 1 || result > GilValidator.MaxGil)
             {
-                error = $"Amount must be between 1 and {GilValidator.MAX_GIL:N0}.";
+                error = $"Amount must be between 1 and {GilValidator.MaxGil:N0}.";
                 return false;
             }
 
@@ -349,7 +351,7 @@ namespace FCCH.Managers.Gil
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Error(ex, "[GilManager] Error disposing debug hook");
+                FCCHLog.Error(ex, "[GilManager] Error disposing debug hook");
             }
             Plugin.AddonLifecycle.UnregisterListener(OnInputNumericSetup);
             Plugin.AddonLifecycle.UnregisterListener(OnBankSetup);

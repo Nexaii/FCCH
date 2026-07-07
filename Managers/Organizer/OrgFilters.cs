@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FCCH.Common;
 using Lumina.Excel.Sheets;
 
 namespace FCCH.Managers.Organizer
@@ -47,14 +48,6 @@ namespace FCCH.Managers.Organizer
 
         private static readonly HashSet<uint> BlockedCategoryIds = new() { 62, 85, 99, 100 };
 
-        private static readonly HashSet<string> _blockBypassNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "Ceruleum Tank",
-            "Magitek Repair Materials",
-        };
-
-        private static readonly HashSet<uint> _blockBypassItemIds = new();
-
         private static readonly Dictionary<uint, uint> _itemCategoryCache = new();
         private static bool _initialized = false;
 
@@ -71,13 +64,12 @@ namespace FCCH.Managers.Organizer
                 foreach (var item in itemSheet)
                 {
                     _itemCategoryCache[item.RowId] = item.ItemUICategory.RowId;
-                    if (_blockBypassNames.Contains(item.Name.ToString()))
-                    {
-                        _blockBypassItemIds.Add(item.RowId);
-                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                FCCHLog.Error(ex, "[OrgFilters] Item category cache build failed; category filters degraded.");
+            }
         }
 
         private static uint GetItemUICategory(uint itemId)
@@ -99,7 +91,7 @@ namespace FCCH.Managers.Organizer
             {
                 var categoryId = GetItemUICategory(slot.ItemId);
 
-                if (IsBlocked(categoryId) && !_blockBypassItemIds.Contains(slot.ItemId)) return false;
+                if (IsBlocked(categoryId) && !Constants.UntradableFcStorableItemIds.Contains(slot.ItemId)) return false;
 
                 if (filters.Contains(OrgFilterCategory.AllItems)) return true;
                 if (filters.Count == 0) return true;

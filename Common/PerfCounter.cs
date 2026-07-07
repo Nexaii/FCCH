@@ -71,7 +71,7 @@ namespace FCCH.Common
                 _windowStartUtc = now;
             }
 
-            try { FCCH.Common.FCCHLog.Info(line); } catch { }
+            try { FCCHLog.Info(line); } catch { }
         }
 
         private static bool IsEnabled()

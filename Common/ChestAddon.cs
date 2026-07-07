@@ -6,7 +6,7 @@ namespace FCCH.Common
     {
         public static AtkUnitBase* GetOpen()
         {
-            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FC_CHEST_ADDON_NAME, 1);
+            var addon = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>(Constants.FreeCompanyChestAddonName, 1);
             return addon != null && addon->IsVisible ? addon : null;
         }
     }

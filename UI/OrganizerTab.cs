@@ -25,7 +25,7 @@ namespace FCCH.UI
         private bool _sortDescending = false;
         private bool _wasChestOpen = false;
         private int _chestClosedFrames = 0;
-        private const int CHEST_CLOSE_THRESHOLD = 3;
+        private const int ChestCloseThreshold = 3;
 
         public OrganizerTab(OrgService service, Configuration config, ChestHelper helper)
         {
@@ -492,7 +492,7 @@ namespace FCCH.UI
         private void DebugLog(string msg)
         {
             if (!_config.DebugMode) return;
-            FCCH.Common.FCCHLog.Info($"[OrganizerTab] {msg}");
+            FCCHLog.Info($"[OrganizerTab] {msg}");
             ChatHelper.Debug($"[OrgTab] {msg}");
         }
 
@@ -506,7 +506,7 @@ namespace FCCH.UI
             if (_wasChestOpen && !isChestOpen)
             {
                 _chestClosedFrames++;
-                if (_chestClosedFrames >= CHEST_CLOSE_THRESHOLD)
+                if (_chestClosedFrames >= ChestCloseThreshold)
                 {
                     DebugLog("Chest closed (confirmed). Resetting check.");
                     _service.Reset();

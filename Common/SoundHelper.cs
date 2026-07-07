@@ -21,7 +21,7 @@ namespace FCCH.Common
 
                 if (!System.IO.File.Exists(soundPath))
                 {
-                    FCCH.Common.FCCHLog.Warning($"[SoundHelper] Sound file not found: {soundPath}");
+                    FCCHLog.Warning($"[SoundHelper] Sound file not found: {soundPath}");
                     return;
                 }
 
@@ -31,7 +31,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCH.Common.FCCHLog.Warning($"[SoundHelper] Failed to play sound: {ex.Message}");
+                FCCHLog.Warning($"[SoundHelper] Failed to play sound: {ex.Message}");
             }
         }
     }

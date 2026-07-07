@@ -1,3 +1,4 @@
+using FCCH.Common;
 using System;
 using System.Collections.Generic;
 using Dalamud.Plugin;
@@ -181,11 +182,11 @@ public sealed class IPCProvider : IDisposable
 
     private static void LogAccepted(string name)
     {
-        try { FCCH.Common.FCCHLog.Info($"[FCCH.IPC] {name} accepted."); } catch { }
+        try { FCCHLog.Info($"[FCCH.IPC] {name} accepted."); } catch { }
     }
 
     private static void LogRefused(string name)
     {
-        try { FCCH.Common.FCCHLog.Info($"[FCCH.IPC] {name} refused."); } catch { }
+        try { FCCHLog.Info($"[FCCH.IPC] {name} refused."); } catch { }
     }
 }

@@ -31,12 +31,12 @@ namespace FCCH.Managers.Organizer
         private OrgCheckResult? _currentJob;
         private int _withdrawIndex;
         private int _depositIndex;
-        private DateTime _lastMoveTime;
-        private DateTime _scanWaitStart;
-        private DateTime _sortWaitStart;
-        private const int MOVE_DELAY_MS = 150;
-        private const int SCAN_WAIT_MS = 1500;
-        private const int SORT_WAIT_MS = 750;
+        private long _lastMoveMs;
+        private long _scanWaitStartMs;
+        private long _sortWaitStartMs;
+        private const int MoveDelayMs = 150;
+        private const int ScanWaitMs = 1500;
+        private const int SortWaitMs = 750;
 
         private InventoryType _lastSrcInv;
         private uint _lastSrcSlot;
@@ -68,7 +68,7 @@ namespace FCCH.Managers.Organizer
         private void DebugLog(string msg)
         {
             if (!_config.DebugMode) return;
-            FCCH.Common.FCCHLog.Info($"[OrgExecutor] {msg}");
+            FCCHLog.Info($"[OrgExecutor] {msg}");
             ChatHelper.Debug($"[OrgExec] {msg}");
         }
 
@@ -92,7 +92,7 @@ namespace FCCH.Managers.Organizer
             _withdrawIndex = 0;
             _depositIndex = 0;
             _state = ExecutorState.Withdrawing;
-            _lastMoveTime = DateTime.MinValue;
+            _lastMoveMs = 0;
             _moveManager.SuppressCompletionSound = true;
 
             _lastSrcInv = InventoryType.Invalid;
@@ -131,7 +131,7 @@ namespace FCCH.Managers.Organizer
                 return;
             }
 
-            if ((DateTime.Now - _lastMoveTime).TotalMilliseconds < MOVE_DELAY_MS)
+            if (Environment.TickCount64 - _lastMoveMs < MoveDelayMs)
             {
                 return;
             }
@@ -170,7 +170,7 @@ namespace FCCH.Managers.Organizer
                 StatusMessage = "Withdraw complete. Waiting for player to sort inventory...";
                 DebugLog($"Withdraw phase complete. {_withdrawIndex} moves processed.");
                 _state = ExecutorState.WaitingForSort;
-                _sortWaitStart = DateTime.Now;
+                _sortWaitStartMs = Environment.TickCount64;
                 return;
             }
 
@@ -180,12 +180,12 @@ namespace FCCH.Managers.Organizer
 
             _moveManager.Enqueue(move);
             _withdrawIndex++;
-            _lastMoveTime = DateTime.Now;
+            _lastMoveMs = Environment.TickCount64;
         }
 
         private void ProcessSort()
         {
-            if ((DateTime.Now - _sortWaitStart).TotalMilliseconds < SORT_WAIT_MS) return;
+            if (Environment.TickCount64 - _sortWaitStartMs < SortWaitMs) return;
 
             DebugLog("Transitioning to Deposit phase.");
             _state = ExecutorState.Depositing;
@@ -197,7 +197,7 @@ namespace FCCH.Managers.Organizer
             if (_currentJob?.DepositMoves == null || _depositIndex >= _currentJob.DepositMoves.Count)
             {
                 _state = ExecutorState.WaitingForScan;
-                _scanWaitStart = DateTime.Now;
+                _scanWaitStartMs = Environment.TickCount64;
                 StatusMessage = "Waiting for sync...";
                 DebugLog($"Deposit complete. Transitioning to WaitingForScan.");
                 return;
@@ -249,7 +249,7 @@ namespace FCCH.Managers.Organizer
             }
 
             _depositIndex++;
-            _lastMoveTime = DateTime.Now;
+            _lastMoveMs = Environment.TickCount64;
         }
 
         private (InventoryType Type, uint Slot)? FindActualPlayerSlot(uint itemId, uint requiredAmount, InventoryType[] types)
@@ -316,7 +316,7 @@ namespace FCCH.Managers.Organizer
 
         private void ProcessScanWait()
         {
-            if ((DateTime.Now - _scanWaitStart).TotalMilliseconds >= SCAN_WAIT_MS)
+            if (Environment.TickCount64 - _scanWaitStartMs >= ScanWaitMs)
             {
                 _chestManager.ScanFCChest();
                 _state = ExecutorState.Verifying;
