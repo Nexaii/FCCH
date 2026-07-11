@@ -29,6 +29,7 @@ namespace FCCH.UI
 
         private const float BarLogicalWidth = 220f;
         private const float PillHeight = 24f;
+        private const long TooltipHideHoldMs = 250;
         private const GamepadButtons FocusButton = GamepadButtons.L1;
 
         private readonly ChestHelper _chestHelper;
@@ -40,6 +41,7 @@ namespace FCCH.UI
 
         private readonly System.Collections.Generic.HashSet<InventoryType> _matchPages = new();
         private ulong _appliedSignature;
+        private long _tooltipHideUntil;
         private bool _filterActive;
         private bool _disposed;
 
@@ -77,7 +79,11 @@ namespace FCCH.UI
                 _window.FocusInput();
 
             _window.IsOpen = true;
-            PositionWindow(addon);
+            var barRect = PositionWindow(addon);
+            if (barRect.HasValue && TooltipOverlaps(barRect.Value))
+                _tooltipHideUntil = Environment.TickCount64 + TooltipHideHoldMs;
+            if (Environment.TickCount64 < _tooltipHideUntil)
+                _window.IsOpen = false;
 
             var page = _chestHelper.ChestManager.GetCurrentFCPage(addon);
             var query = _window.Query;
@@ -108,31 +114,60 @@ namespace FCCH.UI
             return Plugin.GamepadState.Pressed(FocusButton) != 0;
         }
 
-        private void PositionWindow(AtkUnitBase* addon)
+        private Vector4? PositionWindow(AtkUnitBase* addon)
         {
             float scale = addon->Scale;
             var header = addon->WindowHeaderCollisionNode;
             if (header == null)
             {
                 _window.IsOpen = false;
-                return;
+                return null;
             }
 
             float headerWidth = header->Width * scale;
             float barWidth = MathF.Min(BarLogicalWidth * scale, headerWidth * 0.5f);
             float windowHeight = PillHeight * scale;
 
-            float headerCenterX = addon->X + (header->X + header->Width / 2f) * scale;
-            float headerCenterY = addon->Y + (header->Y + header->Height / 2f) * scale;
+            var root = addon->RootNode;
+            float centerX = root != null && root->Width > 0
+                ? addon->X + root->Width / 2f * scale
+                : addon->X + (header->X + header->Width / 2f) * scale;
+            float centerY = addon->Y + (header->Y + header->Height / 2f) * scale;
 
-            float x = headerCenterX - barWidth / 2f;
-            float y = headerCenterY - windowHeight / 2f + 1f;
+            float x = centerX - barWidth / 2f;
+            float y = centerY - windowHeight / 2f + 1f;
 
             _window.NextWidth = barWidth;
             _window.NextHeight = windowHeight;
             _window.NextScale = scale;
             _window.Position = new Vector2(x, y);
             _window.PositionCondition = ImGuiCond.Always;
+
+            return new Vector4(x, y, barWidth, windowHeight);
+        }
+
+        private bool TooltipOverlaps(Vector4 bar)
+        {
+            return AddonOverlaps(Constants.ItemDetailAddonName, bar)
+                || AddonOverlaps(Constants.TooltipAddonName, bar);
+        }
+
+        private bool AddonOverlaps(string addonName, Vector4 bar)
+        {
+            var tooltip = (AtkUnitBase*)_gameGui.GetAddonByName<AtkUnitBase>(addonName, 1);
+            if (tooltip == null || !tooltip->IsVisible || tooltip->RootNode == null)
+                return false;
+
+            float scale = tooltip->Scale;
+            float tx = tooltip->X;
+            float ty = tooltip->Y;
+            float tw = tooltip->RootNode->Width * scale;
+            float th = tooltip->RootNode->Height * scale;
+            if (tw <= 0f || th <= 0f)
+                return false;
+
+            return bar.X < tx + tw && tx < bar.X + bar.Z
+                && bar.Y < ty + th && ty < bar.Y + bar.W;
         }
 
         private ulong ComputeSignature(AtkUnitBase* addon, InventoryType page, string query)

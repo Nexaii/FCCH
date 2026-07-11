@@ -2,7 +2,7 @@
     "Author": "Nexai",
     "Name": "FCCH",
     "InternalName": "FCCH",
-    "AssemblyVersion": "2.4.1.0",
+    "AssemblyVersion": "2.4.2.0",
     "Description": "Free Company Chest Helper. Automate deposits, withdrawals, organization, crystals, workshop project pulls, and custom item lists.",
     "Punchline": "You ain't savin these slots, you puttin em to work.",
     "ApplicableVersion": "any",
@@ -20,5 +20,5 @@
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/fcch.png",
     "RepoUrl": "https://github.com/Nexaii/FCCH",
-    "Changelog": "New: Fast Move handles crystals. No number key needed, and deposits work from any open tab.\nFixed the slot order used when depositing and withdrawing.\nInternal cleanup and reliability fixes."
+    "Changelog": "Search bar adjustments."
 }

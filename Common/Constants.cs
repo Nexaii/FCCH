@@ -21,6 +21,8 @@ namespace FCCH.Common
 
         public const string FreeCompanyChestAddonName = "FreeCompanyChest";
         public const string InputNumericAddonName = "InputNumeric";
+        public const string ItemDetailAddonName = "ItemDetail";
+        public const string TooltipAddonName = "Tooltip";
 
         public const int FreeCompanyChestCallbackId = 2;
         public const int NumericInputCallbackIndex = 3;
