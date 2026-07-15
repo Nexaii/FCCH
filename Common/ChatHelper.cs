@@ -17,6 +17,12 @@ namespace FCCH.Common
 
         public static void Info(string message)
         {
+            if (Plugin.Configuration.QuietMode) return;
+            Reply(message);
+        }
+
+        public static void Reply(string message)
+        {
             var seString = new SeStringBuilder()
                 .AddUiForeground(ColorGreen)
                 .AddText("[FCCH]")
@@ -62,13 +68,7 @@ namespace FCCH.Common
         public static void Verbose(string message)
         {
             if (!Plugin.Configuration.VerboseMode) return;
-            var seString = new SeStringBuilder()
-                .AddUiForeground(ColorGreen)
-                .AddText("[FCCH]")
-                .AddUiForegroundOff()
-                .AddText($" {message}")
-                .Build();
-            Plugin.Chat.Print(seString);
+            Reply(message);
         }
 
         public static void PrintBatchWarnings(System.Collections.Generic.Dictionary<string, int> failures)

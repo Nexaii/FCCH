@@ -20,6 +20,7 @@ namespace FCCH.Managers
         public bool IsProcessing => MoveQueue.Count > 0;
         public bool ProcessedThisFrame { get; private set; } = false;
         public bool SuppressCompletionSound { get; set; } = false;
+        public bool SuppressBatchSummary { get; set; } = false;
         public int TotalQueued { get; private set; } = 0;
         public int CompletedCount { get; private set; } = 0;
         public int RefusedCount { get; private set; } = 0;
@@ -312,7 +313,7 @@ namespace FCCH.Managers
             string msg = $"Done. {succeeded}/{TotalQueued} moves completed.";
             if (RefusedCount > 0) msg += $" {RefusedCount} refused.";
             if (SkippedByBlockCount > 0) msg += $" {SkippedByBlockCount} skipped (blocked tabs).";
-            ChatHelper.Info(msg);
+            if (!SuppressBatchSummary) ChatHelper.Info(msg);
             TotalQueued = 0;
             CompletedCount = 0;
             RefusedCount = 0;

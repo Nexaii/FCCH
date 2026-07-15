@@ -94,6 +94,7 @@ namespace FCCH.Managers.Organizer
             _state = ExecutorState.Withdrawing;
             _lastMoveMs = 0;
             _moveManager.SuppressCompletionSound = true;
+            _moveManager.SuppressBatchSummary = true;
 
             _lastSrcInv = InventoryType.Invalid;
             _lastSrcSlot = 0;
@@ -114,6 +115,7 @@ namespace FCCH.Managers.Organizer
             _state = ExecutorState.Idle;
             _moveManager.Clear();
             _moveManager.SuppressCompletionSound = false;
+            _moveManager.SuppressBatchSummary = false;
             StatusMessage = "Job cancelled.";
         }
 
@@ -333,6 +335,7 @@ namespace FCCH.Managers.Organizer
                 StatusMessage = "Job completed successfully.";
                 DebugLog("No expected counts to verify. Job COMPLETED.");
                 _moveManager.SuppressCompletionSound = false;
+                _moveManager.SuppressBatchSummary = false;
                 OnJobCompleted?.Invoke();
                 return;
             }
@@ -368,6 +371,7 @@ namespace FCCH.Managers.Organizer
                 StatusMessage = $"Verification failed: {mismatches.First()}";
                 DebugLog($"Verification FAILED. Mismatches: {string.Join(", ", mismatches)}");
                 _moveManager.SuppressCompletionSound = false;
+                _moveManager.SuppressBatchSummary = false;
             }
             else
             {
@@ -375,6 +379,7 @@ namespace FCCH.Managers.Organizer
                 StatusMessage = "Job completed successfully.";
                 DebugLog($"Verification passed. Job COMPLETED.");
                 _moveManager.SuppressCompletionSound = false;
+                _moveManager.SuppressBatchSummary = false;
                 OnJobCompleted?.Invoke();
             }
         }

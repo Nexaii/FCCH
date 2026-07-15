@@ -66,7 +66,9 @@ namespace FCCH
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
 
-            OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration, () => ChestHelper.StartIndexing(autoDump: false));
+            OrgService = new OrgService(ChestHelper.ChestManager, ChestHelper.MoveManager, Configuration,
+                tabs => ChestHelper.RefreshTabs(tabs),
+                tab => ChestHelper.SwitchToTab(tab));
             ChestHelper.ExternalOperationActive = () => OrgService.JobStatus == OrgJobStatus.Running;
             ChestHelper.CompanyChestClosedDuringOperation += OnCompanyChestClosedDuringOperation;
             ItemContextMenu = new ContextMenuManager(ContextMenu, Configuration, ChestHelper, KeyState);
@@ -203,7 +205,7 @@ namespace FCCH
                     ChestHelper.ProcessCommand(() => ChestHelper.WithdrawWorkshopItems());
                     break;
                 case "help":
-                    ChatHelper.Info(CommandHelpMessage);
+                    ChatHelper.Reply(CommandHelpMessage);
                     break;
 
 #if DEBUG
@@ -215,7 +217,7 @@ namespace FCCH
                         
                         var tabString = string.Join(", ", System.Linq.Enumerable.Select(tabs, 
                             t => t.ToString().Replace("FreeCompanyPage", "")));
-                        ChatHelper.Info($"FC Rank: {rank}. Available Tabs: {tabString}");
+                        ChatHelper.Reply($"FC Rank: {rank}. Available Tabs: {tabString}");
 
                         var sb = new System.Text.StringBuilder();
                         sb.Append($"Permissions: ");
@@ -229,8 +231,8 @@ namespace FCCH
                         
                         if (sb.Length > 3) sb.Length -= 3;
                         
-                        ChatHelper.Info(sb.ToString());
-                        ChatHelper.Info($"Gil: {GilManager.GetPermissionString()}");
+                        ChatHelper.Reply(sb.ToString());
+                        ChatHelper.Reply($"Gil: {GilManager.GetPermissionString()}");
                     });
                     break;
 #endif
@@ -250,18 +252,18 @@ namespace FCCH
                         byte? overrideRank = null;
                         if (parts.Length > 1 && byte.TryParse(parts[1], out var r)) overrideRank = r;
                         ChestHelper.DumpRawPermissions(overrideRank);
-                        ChatHelper.Info("FC permission dump written to log (/xllog).");
+                        ChatHelper.Reply("FC permission dump written to log (/xllog).");
                     });
                     break;
                 case "accessprobe":
                 case "aprobe":
-                    ChatHelper.Info(ChestHelper.DumpAccessProbe());
+                    ChatHelper.Reply(ChestHelper.DumpAccessProbe());
                     break;
 #endif
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();
-                    ChatHelper.Info($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
+                    ChatHelper.Reply($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
 #if DEBUG
                 case "whatsnew":
@@ -269,7 +271,7 @@ namespace FCCH
                     break;
 #endif
                 default:
-                    ChatHelper.Info($"Unknown FCCH command: {subCommand}. Use /fcch help.");
+                    ChatHelper.Reply($"Unknown FCCH command: {subCommand}. Use /fcch help.");
                     break;
             }
         }

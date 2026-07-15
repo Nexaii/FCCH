@@ -37,6 +37,11 @@ namespace FCCH.Managers.Gil
             _pendingTransaction = transaction;
         }
 
+        private static string ClampSuffix(PendingGilTransaction transaction)
+            => transaction.RequestedAmount > transaction.Amount
+                ? $" (clamped from {transaction.RequestedAmount:N0})"
+                : "";
+
         private void OnInputNumericSetup(AddonEvent type, AddonArgs args)
         {
             var pending = _pendingTransaction;
@@ -61,7 +66,7 @@ namespace FCCH.Managers.Gil
                 addon->FireCallback(1, values);
 
                 _pendingTransaction = null;
-                ChatHelper.Info($"{(transaction.IsDeposit ? "Deposited" : "Withdrew")} {transaction.Amount:N0} Gil.");
+                ChatHelper.Info($"{(transaction.IsDeposit ? "Deposited" : "Withdrew")} {transaction.Amount:N0} Gil{ClampSuffix(transaction)}.");
             }
             catch (Exception ex)
             {
@@ -91,7 +96,7 @@ namespace FCCH.Managers.Gil
                 Callback.Fire(addon, true, 3, (uint)transaction.Amount);
                 Callback.Fire(addon, true, 0);
                 _pendingTransaction = null;
-                ChatHelper.Info($"Deposited {transaction.Amount:N0} Gil.");
+                ChatHelper.Info($"Deposited {transaction.Amount:N0} Gil{ClampSuffix(transaction)}.");
             }
             catch (Exception ex)
             {

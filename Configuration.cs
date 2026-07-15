@@ -38,6 +38,7 @@ namespace FCCH
 
         public bool DebugMode { get; set; } = false;
         public bool VerboseMode { get; set; } = false;
+        public bool QuietMode { get; set; } = false;
         public bool CompactItemNames { get; set; } = true;
         public bool EnableItemContextMenuEntries { get; set; } = false;
         public bool FastMoveEnabled { get; set; } = false;

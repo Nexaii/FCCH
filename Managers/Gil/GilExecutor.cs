@@ -53,6 +53,7 @@ namespace FCCH.Managers.Gil
             _setPendingTransaction(new PendingGilTransaction
             {
                 Amount = finalAmount,
+                RequestedAmount = amount,
                 IsDeposit = true,
                 TimestampMs = Environment.TickCount64
             });
@@ -100,6 +101,7 @@ namespace FCCH.Managers.Gil
             _setPendingTransaction(new PendingGilTransaction
             {
                 Amount = finalAmount,
+                RequestedAmount = amount,
                 IsDeposit = false,
                 TimestampMs = Environment.TickCount64
             });
@@ -146,6 +148,7 @@ namespace FCCH.Managers.Gil
             _setPendingTransaction(new PendingGilTransaction
             {
                 Amount = validationResult.AdjustedAmount,
+                RequestedAmount = amount,
                 IsDeposit = true,
                 TimestampMs = Environment.TickCount64
             });
@@ -179,6 +182,7 @@ namespace FCCH.Managers.Gil
     public struct PendingGilTransaction
     {
         public uint Amount;
+        public uint RequestedAmount;
         public bool IsDeposit;
         public long TimestampMs;
     }

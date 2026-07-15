@@ -45,7 +45,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for deposit.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit.");
             else ChatHelper.Info("No items to deposit.");
         }
 
@@ -86,7 +86,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for withdrawal.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal.");
             else ChatHelper.Info("No items to withdraw.");
         }
 
@@ -98,7 +98,7 @@ namespace FCCH.Managers
                 .ToList();
 
             if (skipped.Count > 0)
-                ChatHelper.Info($"Skipping {command} for tabs: {FormatTabs(skipped)}");
+                ChatHelper.Verbose($"Skipping {command} for tabs: {FormatTabs(skipped)}");
         }
 
         private static bool CanDeposit(byte access)
@@ -162,7 +162,7 @@ namespace FCCH.Managers
             if (OperationManager.LastDepositOverflow.Count > 0)
                 ChatHelper.Warning($"{OperationManager.LastDepositOverflow.Count} item(s) skipped - Tab {tab} full.");
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for deposit to Tab {tab}.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit to Tab {tab}.");
             else ChatHelper.Info($"No items to deposit to Tab {tab}.");
         }
 
@@ -236,7 +236,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} duplicates for deposit.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} duplicates for deposit.");
             else ChatHelper.Info("No duplicates to deposit.");
         }
 
@@ -275,7 +275,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for withdrawal from Tab {tab}.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal from Tab {tab}.");
             else ChatHelper.Info($"No items to withdraw from Tab {tab}.");
         }
 
@@ -291,7 +291,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} items for workshop withdrawal.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for workshop withdrawal.");
             else ChatHelper.Info("No materials found to withdraw.");
         }
 
@@ -313,7 +313,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} requested items for deposit.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} requested items for deposit.");
             else ChatHelper.Info("No requested items to deposit.");
         }
 
@@ -336,7 +336,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} custom items for deposit.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for deposit.");
             else ChatHelper.Info("No custom items to deposit.");
         }
 
@@ -359,7 +359,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Info($"Queued {moves.Count} custom items for withdrawal.");
+            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for withdrawal.");
             else ChatHelper.Info("No custom items to withdraw.");
         }
 

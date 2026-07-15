@@ -13,11 +13,13 @@ namespace FCCH.Managers.Organizer
         private readonly ChestManager _chestManager;
         private readonly MoveManager _moveManager;
         private readonly Configuration _config;
-        private readonly Action _onReindexRequested;
+        private readonly Action<IEnumerable<InventoryType>> _onTabsRefreshRequested;
+        private readonly Action<InventoryType> _onViewTabRequested;
 
         private bool _sortActive;
         private bool _sortDraining;
         private int _sortPass;
+        private int _sortMoveTotal;
         private InventoryType _sortTab;
         private OrgSortOrder _sortOrder;
         private bool _sortDescending;
@@ -26,6 +28,7 @@ namespace FCCH.Managers.Organizer
         private bool _mergeActive;
         private bool _mergeDraining;
         private bool _mergeRechecked;
+        private int _mergeMoveTotal;
         private InventoryType _mergeTab;
 
         private const int SortMaxPasses = 2;
@@ -46,12 +49,13 @@ namespace FCCH.Managers.Organizer
             remove => _executor.OnJobCompleted -= value;
         }
 
-        public OrgService(ChestManager chestManager, MoveManager moveManager, Configuration config, Action onReindexRequested)
+        public OrgService(ChestManager chestManager, MoveManager moveManager, Configuration config, Action<IEnumerable<InventoryType>> onTabsRefreshRequested, Action<InventoryType> onViewTabRequested)
         {
             _chestManager = chestManager;
             _moveManager = moveManager;
             _config = config;
-            _onReindexRequested = onReindexRequested;
+            _onTabsRefreshRequested = onTabsRefreshRequested;
+            _onViewTabRequested = onViewTabRequested;
             _validator = new OrgValidator(chestManager, config);
             _executor = new OrgExecutor(chestManager, moveManager, config);
             _executor.OnJobCompleted += HandleJobCompleted;
@@ -125,10 +129,13 @@ namespace FCCH.Managers.Organizer
 
             _moveManager.Clear();
             _moveManager.SuppressCompletionSound = true;
+            _moveManager.SuppressBatchSummary = true;
+            _onViewTabRequested(tab);
 
             _sortActive = true;
             _sortDraining = false;
             _sortPass = 1;
+            _sortMoveTotal = moves.Count;
             _sortTab = tab;
             _sortOrder = order;
             _sortDescending = descending;
@@ -137,7 +144,7 @@ namespace FCCH.Managers.Organizer
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
 
-            ChatHelper.Info($"Queued {moves.Count} sort moves.");
+            ChatHelper.Verbose($"Queued {moves.Count} sort moves.");
             return true;
         }
 
@@ -171,6 +178,7 @@ namespace FCCH.Managers.Organizer
 
             _sortPass++;
             _sortDraining = true;
+            _sortMoveTotal += moves.Count;
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
         }
@@ -187,11 +195,13 @@ namespace FCCH.Managers.Organizer
             _sortActive = false;
             _sortDraining = false;
             _moveManager.SuppressCompletionSound = false;
+            _moveManager.SuppressBatchSummary = false;
 
             if (success)
             {
+                ChatHelper.Info($"Sorted {GetTabDisplayName(_sortTab)} ({_sortMoveTotal} moves).");
                 Common.SoundHelper.PlayCompletionSound(_config);
-                _onReindexRequested?.Invoke();
+                _onTabsRefreshRequested(new[] { _sortTab });
             }
         }
 
@@ -220,16 +230,19 @@ namespace FCCH.Managers.Organizer
 
             _moveManager.Clear();
             _moveManager.SuppressCompletionSound = true;
+            _moveManager.SuppressBatchSummary = true;
+            _onViewTabRequested(tab);
 
             _mergeActive = true;
             _mergeDraining = false;
             _mergeRechecked = false;
+            _mergeMoveTotal = moves.Count;
             _mergeTab = tab;
 
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
 
-            ChatHelper.Info($"Queued {moves.Count} merge moves.");
+            ChatHelper.Verbose($"Queued {moves.Count} merge moves.");
             return true;
         }
 
@@ -263,6 +276,7 @@ namespace FCCH.Managers.Organizer
 
             _mergeRechecked = true;
             _mergeDraining = true;
+            _mergeMoveTotal += moves.Count;
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
         }
@@ -279,11 +293,13 @@ namespace FCCH.Managers.Organizer
             _mergeActive = false;
             _mergeDraining = false;
             _moveManager.SuppressCompletionSound = false;
+            _moveManager.SuppressBatchSummary = false;
 
             if (success)
             {
+                ChatHelper.Info($"Merged {GetTabDisplayName(_mergeTab)} ({_mergeMoveTotal} moves).");
                 Common.SoundHelper.PlayCompletionSound(_config);
-                _onReindexRequested?.Invoke();
+                _onTabsRefreshRequested(new[] { _mergeTab });
             }
         }
 
@@ -294,9 +310,13 @@ namespace FCCH.Managers.Organizer
 
         private void HandleJobCompleted()
         {
-            DebugLog("Job completed. Triggering chest reindex.");
+            DebugLog("Job completed. Refreshing affected tabs.");
+            var moved = LastCheck?.DepositMoves?.Count ?? 0;
+            ChatHelper.Info(moved > 0
+                ? $"Moved {moved} items to {GetTabDisplayName(CurrentRequest.DestTab)}."
+                : "Organizer job completed.");
             LastCheck = null;
-            _onReindexRequested?.Invoke();
+            _onTabsRefreshRequested(new[] { CurrentRequest.SourceTab, CurrentRequest.DestTab });
             Common.SoundHelper.PlayCompletionSound(_config);
         }
 
@@ -334,7 +354,16 @@ namespace FCCH.Managers.Organizer
             }
 
             DebugLog($"Starting executor with {LastCheck.WithdrawMoves?.Count ?? 0} withdraws, {LastCheck.DepositMoves?.Count ?? 0} deposits");
-            return _executor.StartJob(LastCheck);
+            var started = _executor.StartJob(LastCheck);
+            if (started)
+            {
+                var view = IsItemPage(CurrentRequest.DestTab) ? CurrentRequest.DestTab
+                    : IsItemPage(CurrentRequest.SourceTab) ? CurrentRequest.SourceTab
+                    : InventoryType.Invalid;
+                if (view != InventoryType.Invalid)
+                    _onViewTabRequested(view);
+            }
+            return started;
         }
 
         public void Cancel()

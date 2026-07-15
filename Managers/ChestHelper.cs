@@ -166,26 +166,9 @@ namespace FCCH.Managers
 
                  ChestManager.ScanFCChest();
                  
-                 if (OperationManager.LastDepositOverflow.Count > 0)
-                 {
-                     ChatHelper.Warning("Overflow (FC stacks full):");
-                     foreach (var (itemId, remaining) in OperationManager.LastDepositOverflow)
-                     {
-                         ChatHelper.Warning($"  - {GetItemName(itemId)}: {remaining} remaining");
-                     }
-                 }
-                 
-                 if (OperationManager.LastWithdrawOverflow.Count > 0)
-                 {
-                     ChatHelper.Warning("Overflow (inventory full):");
-                     foreach (var (itemId, remaining) in OperationManager.LastWithdrawOverflow)
-                     {
-                         ChatHelper.Warning($"  - {GetItemName(itemId)}: {remaining} remaining");
-                     }
-                 }
-                 
-                 ChatHelper.Info("Operation complete.");
-                 
+                 ReportOverflow("FC stacks full", OperationManager.LastDepositOverflow);
+                 ReportOverflow("inventory full", OperationManager.LastWithdrawOverflow);
+
                 if (!MoveManager.SuppressCompletionSound)
                     SoundHelper.PlayCompletionSound(_configuration);
             }
@@ -211,6 +194,7 @@ namespace FCCH.Managers
         {
             MoveManager.Clear();
             MoveManager.SuppressCompletionSound = false;
+            MoveManager.SuppressBatchSummary = false;
             _indexer.Stop();
             _pendingCommand = null;
             _isWaitingForIndex = false;
@@ -426,6 +410,14 @@ namespace FCCH.Managers
         }
 
         public string GetItemName(uint itemId) => Common.ItemNames.Get(itemId);
+
+        private void ReportOverflow(string reason, List<(uint ItemId, uint Remaining)> overflow)
+        {
+            if (overflow.Count == 0) return;
+            ChatHelper.Warning($"{overflow.Count} item(s) could not be moved ({reason}).");
+            foreach (var (itemId, remaining) in overflow)
+                ChatHelper.Verbose($"  - {GetItemName(itemId)}: {remaining} remaining");
+        }
         
         public void WithdrawMaterials(Dictionary<uint, int> items) => _commandHandler.WithdrawMaterials(items);
         public void DepositMaterials(Dictionary<uint, int> items) => _commandHandler.DepositMaterials(items);
@@ -492,6 +484,8 @@ namespace FCCH.Managers
         }
         
         public void SwitchToTab(InventoryType type) => _commandHandler.SwitchToTab(type);
+
+        public void RefreshTabs(IEnumerable<InventoryType> tabs) => _indexer.StartTabs(tabs);
     }
 
 }

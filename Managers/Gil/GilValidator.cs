@@ -36,7 +36,7 @@ namespace FCCH.Managers.Gil
 
             if (finalAmount < requestedAmount)
             {
-                ChatHelper.Info($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
+                ChatHelper.Verbose($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
             }
 
             return new GilValidationResult { IsValid = true, AdjustedAmount = finalAmount, ErrorMessage = "" };
@@ -66,7 +66,7 @@ namespace FCCH.Managers.Gil
 
             if (finalAmount < requestedAmount)
             {
-                ChatHelper.Info($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
+                ChatHelper.Verbose($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
             }
 
             return new GilValidationResult { IsValid = true, AdjustedAmount = finalAmount, ErrorMessage = "" };

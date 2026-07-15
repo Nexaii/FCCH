@@ -44,7 +44,7 @@ namespace FCCH.Managers
                 _chestManager.ClearPage(tab);
 
             if (restricted.Count > 0)
-                ChatHelper.Info($"Skipping indexing restricted sections: {FormatSections(restricted)}");
+                ChatHelper.Verbose($"Skipping indexing restricted sections: {FormatSections(restricted)}");
 
             _queue = new Queue<InventoryType>(tabs.Except(restricted));
 
@@ -54,6 +54,24 @@ namespace FCCH.Managers
                 _targetPage = _queue.Dequeue();
                 _phase = IndexingPhase.Switching;
             }
+        }
+
+        public void StartTabs(IEnumerable<InventoryType> tabsToScan)
+        {
+            _autoDumpAfterIndexing = false;
+            var available = _chestManager.GetAvailableTabs();
+            var allowed = tabsToScan
+                .Distinct()
+                .Where(available.Contains)
+                .Where(x => _chestManager.GetChestAccess(x) != Constants.FCPermissions.NoAccess)
+                .ToList();
+
+            if (allowed.Count == 0) return;
+
+            _queue = new Queue<InventoryType>(allowed);
+            _tabCount = _queue.Count;
+            _targetPage = _queue.Dequeue();
+            _phase = IndexingPhase.Switching;
         }
 
         public void Stop() => _phase = IndexingPhase.Idle;
@@ -98,7 +116,7 @@ namespace FCCH.Managers
                     else
                     {
                         _phase = IndexingPhase.Idle;
-                        ChatHelper.Info($"Indexed {_tabCount} tabs.");
+                        ChatHelper.Verbose($"Indexed {_tabCount} tabs.");
 
                         if (_configuration.DebugMode)
                         {

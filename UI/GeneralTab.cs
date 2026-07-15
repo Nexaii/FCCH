@@ -71,29 +71,29 @@ namespace FCCH.UI
                 {
                     DrawToggleGrid(new[]
                     {
+                        new Toggle("Compact Item Names", "Shorten supported item names in Custom, Ignore, and Organizer lists.", "compactItemNames",
+                            () => _configuration.CompactItemNames, v => _configuration.CompactItemNames = v),
+                        new Toggle("Item Context Menu", "Add FCCH entries to supported item right-click menus.", "itemContextMenu",
+                            () => _configuration.EnableItemContextMenuEntries, v => _configuration.EnableItemContextMenuEntries = v),
+                        new Toggle("Leave One per Stack", "Always leave at least 1 item in the FC Chest when withdrawing.", "leaveOne",
+                            () => _configuration.LeaveOneItemPerStack, v => _configuration.LeaveOneItemPerStack = v),
+                        new Toggle("Lower Quality on Deposit", "Automatically convert HQ items to NQ before depositing.", "lowerQual",
+                            () => _configuration.LowerQualityOnDeposit, v => _configuration.LowerQualityOnDeposit = v),
+                        new Toggle("Quiet Chat", "Only warnings and errors are shown in chat.", "quietChat",
+                            () => _configuration.QuietMode, v => _configuration.QuietMode = v),
+                        new Toggle("Search Bar", "Show the search bar overlay on the FC Chest header. Press Ctrl+F to focus it.", "searchBar",
+                            () => _configuration.SearchBarEnabled, v => _configuration.SearchBarEnabled = v),
                         new Toggle("Skip Deposit Confirm", "", "skipDep",
                             () => _configuration.DisableAskDepositAll, v => _configuration.DisableAskDepositAll = v),
                         new Toggle("Skip Withdraw Confirm", "", "skipWith",
                             () => _configuration.DisableAskWithdrawAll, v => _configuration.DisableAskWithdrawAll = v),
-                        new Toggle("Lower Quality on Deposit", "Automatically convert HQ items to NQ before depositing.", "lowerQual",
-                            () => _configuration.LowerQualityOnDeposit, v => _configuration.LowerQualityOnDeposit = v),
-                        new Toggle("Leave One per Stack", "Always leave at least 1 item in the FC Chest when withdrawing.", "leaveOne",
-                            () => _configuration.LeaveOneItemPerStack, v => _configuration.LeaveOneItemPerStack = v),
-                        new Toggle("Compact Item Names", "Shorten supported item names in Custom, Ignore, and Organizer lists.", "compactItemNames",
-                            () => _configuration.CompactItemNames, v => _configuration.CompactItemNames = v),
-                        new Toggle("Search Bar", "Show the search bar overlay on the FC Chest header. Press Ctrl+F to focus it.", "searchBar",
-                            () => _configuration.SearchBarEnabled, v => _configuration.SearchBarEnabled = v),
-                        new Toggle("Item Context Menu", "Add FCCH entries to supported item right-click menus.", "itemContextMenu",
-                            () => _configuration.EnableItemContextMenuEntries, v => _configuration.EnableItemContextMenuEntries = v),
-                        new Toggle("Fast Move", "Modifier + right-click: deposit an inventory item or withdraw a chest item.\nDeposits to the open tab or hold 1-5 to pick a specific tab.", "fastMove",
-                            () => _configuration.FastMoveEnabled, v => _configuration.FastMoveEnabled = v),
                     });
+                }
+                ImGui.Spacing();
 
-                    if (_configuration.FastMoveEnabled)
-                    {
-                        DrawSettingRow("  Modifier + Right-Click", DrawModifierDropdown);
-                        DrawFastMoveConflictNote();
-                    }
+                if (DrawSection("Fast Move"))
+                {
+                    DrawFastMoveRow();
                 }
                 ImGui.Spacing();
 
@@ -276,6 +276,7 @@ namespace FCCH.UI
                     _configuration.VerboseMode = false;
                     _configuration.CompactItemNames = true;
                     _configuration.EnableItemContextMenuEntries = false;
+                    _configuration.QuietMode = false;
                     _configuration.Save();
                 }
                 ImGui.PopStyleColor();
@@ -286,6 +287,45 @@ namespace FCCH.UI
         }
 
         private static readonly VirtualKey[] FastMoveModifiers = { VirtualKey.MENU, VirtualKey.CONTROL, VirtualKey.SHIFT };
+
+        private void DrawFastMoveRow()
+        {
+            const string tooltip = "Modifier + right-click an item, or crystals, to deposit/withdraw from chest.\n" +
+                "Hold 1-5 to deposit into a specific tab.";
+
+            bool enabled = _configuration.FastMoveEnabled;
+            if (ImGui.Checkbox("Enabled##fastMove", ref enabled))
+            {
+                _configuration.FastMoveEnabled = enabled;
+                _configuration.Save();
+            }
+            ImGui.SameLine();
+            ImGui.TextDisabled("(?)");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
+
+            ImGui.SameLine(180);
+            ImGui.BeginDisabled(!enabled);
+            DrawModifierDropdown();
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("+ Right-Click");
+
+            const string note = "May conflict with other plugins. If it misfires, change the modifier, or disable the other plugin.";
+            ImGui.Spacing();
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
+            float width = ImGui.GetContentRegionAvail().X;
+            float textHeight = ImGui.CalcTextSize(note, false, width - ImGui.GetStyle().WindowPadding.X * 2).Y;
+            float boxHeight = textHeight + ImGui.GetStyle().WindowPadding.Y * 2;
+            if (ImGui.BeginChild("FastMoveConflictNote", new Vector2(width, boxHeight), true))
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudOrange);
+                ImGui.TextWrapped(note);
+                ImGui.PopStyleColor();
+            }
+            ImGui.EndChild();
+            ImGui.PopStyleColor();
+        }
 
         private void DrawModifierDropdown()
         {
@@ -302,25 +342,6 @@ namespace FCCH.UI
                 }
                 ImGui.EndCombo();
             }
-        }
-
-        private static void DrawFastMoveConflictNote()
-        {
-            const string note = "Fast Move may conflict with other plugins. If it misfires or items go to the wrong destination, disable the other plugin or change the modifier above.";
-
-            ImGui.Spacing();
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
-            float width = ImGui.GetContentRegionAvail().X;
-            float textHeight = ImGui.CalcTextSize(note, false, width - ImGui.GetStyle().WindowPadding.X * 2).Y;
-            float boxHeight = textHeight + ImGui.GetStyle().WindowPadding.Y * 2;
-            if (ImGui.BeginChild("FastMoveConflictNote", new Vector2(width, boxHeight), true))
-            {
-                ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudOrange);
-                ImGui.TextWrapped(note);
-                ImGui.PopStyleColor();
-            }
-            ImGui.EndChild();
-            ImGui.PopStyleColor();
         }
 
         private void DrawSettingRow(string label, System.Action drawControl)
