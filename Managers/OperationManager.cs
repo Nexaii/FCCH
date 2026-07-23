@@ -444,7 +444,7 @@ namespace FCCH.Managers
                     .Where(x => sourcePageFilter == null || x.Page == sourcePageFilter)
                     .Where(x => sourcePages == null || sourcePages.Contains(x.Page))
                     .Where(x => sourceSlotFilter == null || x.Slot == sourceSlotFilter)
-                    .OrderBy(x => x.Page).ThenBy(x => x.Slot)
+                    .OrderBy(x => x.Page).ThenByDescending(x => x.Slot)
                     .ToList();
 
                 foreach (var chestSlot in chestItems)

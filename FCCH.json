@@ -2,7 +2,7 @@
     "Author": "Nexai",
     "Name": "FCCH",
     "InternalName": "FCCH",
-    "AssemblyVersion": "2.4.3.0",
+    "AssemblyVersion": "2.4.4.0",
     "Description": "Free Company Chest Helper. Automate deposits, withdrawals, organization, crystals, workshop project pulls, and custom item lists.",
     "Punchline": "Automate Free Company chest deposits, withdrawals, organization, and workshop material pulls.",
     "ApplicableVersion": "any",
@@ -26,5 +26,5 @@
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/fcch.png",
     "RepoUrl": "https://github.com/Nexaii/FCCH",
-    "Changelog": "Leaner chat output plus a Quiet Chat toggle.\nOrganizer jumps to the affected tab, skips the full rescan, and reports one summary line per job."
+    "Changelog": "Withdraw pulls from the rear stack first, leaving your front stacks maxed to mirror the deposit method."
 }
