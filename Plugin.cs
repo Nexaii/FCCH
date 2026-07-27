@@ -94,8 +94,6 @@ namespace FCCH
             
             Framework.Update += OnUpdate;
 
-            Migration.RepoMigrator.Run();
-
             ShowWhatsNewIfUnseen(isFreshInstall);
         }
 
