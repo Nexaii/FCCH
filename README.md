@@ -124,14 +124,3 @@ Other plugins can drive FCCH via Dalamud IPC. Mutation calls return `bool`. `tru
 | `FCCH.Stop` | `bool()` | Stop the current operation |
 
 Mutations need the FC chest open. FCCH opens it automatically if closed.
-
-### Diagnostics
-
-The General settings tab has a collapsed Diagnostics section. Developer commands:
-
-| Command | Description |
-| :--- | :--- |
-| `/fcch debug` | Toggle debug logging |
-| `/fcch gildebug` | Trace gil callbacks |
-| `/fcch accessprobe` | Dump live Company Chest addon permission state |
-| `/fcch fcperms [row]` | Dump raw FC rank permission bytes to plugin log |
