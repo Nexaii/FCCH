@@ -90,7 +90,9 @@ namespace FCCH.Managers
 
         private void OnUpdate(IFramework framework)
         {
-            var __perfStart = System.Diagnostics.Stopwatch.GetTimestamp();
+#if DEBUG
+            var perfStart = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
             try
             {
             var addon = Common.ChestAddon.GetOpen();
@@ -177,8 +179,10 @@ namespace FCCH.Managers
             }
             finally
             {
-                Common.PerfCounter.RecordOnUpdate(System.Diagnostics.Stopwatch.GetTimestamp() - __perfStart);
+#if DEBUG
+                Common.PerfCounter.RecordOnUpdate(System.Diagnostics.Stopwatch.GetTimestamp() - perfStart);
                 Common.PerfCounter.TickAndMaybeFlush();
+#endif
             }
         }
 

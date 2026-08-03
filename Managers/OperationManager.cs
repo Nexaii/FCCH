@@ -166,12 +166,18 @@ namespace FCCH.Managers
                     }
 
                     bool isHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality;
+                    bool targetHq = isHq && !config.LowerQualityOnDeposit;
                     uint srcSlot = (uint)i;
 
                     uint requestedFromSlot = remainingToDeposit;
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
-                        ? stacks.Where(x => x.Quantity < x.MaxStack && allowedTabSet.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        ? stacks.Where(x => x.Quantity < x.MaxStack && x.IsHq == targetHq && allowedTabSet.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
+
+                    if (config.DebugMode && stacks != null)
+                    {
+                        FCCHLog.Info($"[Deposit] item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}");
+                    }
 
                     foreach (var stack in partialStacks)
                     {
@@ -222,7 +228,7 @@ namespace FCCH.Managers
                             Slot = (uint)empty.Value.Item2,
                             ItemId = item->ItemId,
                             Quantity = transfer,
-                            IsHq = isHq,
+                            IsHq = targetHq,
                             MaxStack = itemMaxStack
                         };
                         virtualFC.Add(newSlot);
@@ -266,6 +272,8 @@ namespace FCCH.Managers
             return moves;
         }
 
+        public static List<(uint ItemId, uint Remaining)> LastDuplicateOverflow { get; private set; } = new();
+
         public static List<MoveOperation> CalculateDuplicateMoves(
             ChestManager chestManager,
             Configuration config,
@@ -273,6 +281,7 @@ namespace FCCH.Managers
         {
             var moves = new List<MoveOperation>();
             var virtualFC = chestManager.CachedItems.ToList();
+            LastDuplicateOverflow.Clear();
 
             var stacksByItemId = new Dictionary<uint, List<ChestManager.ScannedSlot>>();
             var occupiedSlots = new HashSet<(InventoryType, uint)>();
@@ -306,11 +315,18 @@ namespace FCCH.Managers
 
                     if (config.IgnoreList.Any(x => x.ItemId == item->ItemId && x.IgnoreEntrust)) continue;
 
+                    bool isHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality;
+                    bool targetHq = isHq && !config.LowerQualityOnDeposit;
                     uint srcSlot = (uint)i;
 
                     var partialStacks = stacksByItemId.TryGetValue(item->ItemId, out var stacks)
-                        ? stacks.Where(x => x.Quantity < x.MaxStack).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
+                        ? stacks.Where(x => x.Quantity < x.MaxStack && x.IsHq == targetHq).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
+
+                    if (config.DebugMode && stacks != null)
+                    {
+                        FCCHLog.Info($"[Duplicate] item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}");
+                    }
 
                     foreach (var stack in partialStacks)
                     {
@@ -374,7 +390,7 @@ namespace FCCH.Managers
                                             Slot = s,
                                             ItemId = item->ItemId,
                                             Quantity = transfer,
-                                            IsHq = (item->Flags & InventoryItem.ItemFlags.HighQuality) == InventoryItem.ItemFlags.HighQuality,
+                                            IsHq = targetHq,
                                             MaxStack = itemMaxStack
                                         };
                                         virtualFC.Add(newSlot);
@@ -387,10 +403,26 @@ namespace FCCH.Managers
                                     }
                                 }
                             }
+
+                            if (remainingToDeposit > 0)
+                            {
+                                var existing = LastDuplicateOverflow.FindIndex(x => x.ItemId == item->ItemId);
+                                if (existing >= 0)
+                                    LastDuplicateOverflow[existing] = (item->ItemId, LastDuplicateOverflow[existing].Remaining + remainingToDeposit);
+                                else
+                                    LastDuplicateOverflow.Add((item->ItemId, remainingToDeposit));
+                            }
                         }
                     }
 
                 }
+            }
+
+            if (LastDuplicateOverflow.Count > 0)
+            {
+                var failureCounts = new Dictionary<string, int>();
+                failureCounts["Inventory/Stack Full"] = LastDuplicateOverflow.Count;
+                ChatHelper.PrintBatchWarnings(failureCounts);
             }
 
             moves.Sort((a, b) => a.DstInv.CompareTo(b.DstInv) != 0 ? a.DstInv.CompareTo(b.DstInv) : a.DstSlot.CompareTo(b.DstSlot));

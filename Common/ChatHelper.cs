@@ -34,6 +34,7 @@ namespace FCCH.Common
 
         public static void Debug(string message)
         {
+#if DEBUG
             var seString = new SeStringBuilder()
                 .AddUiForeground(ColorOrange)
                 .AddText("[FCCH] Debug:")
@@ -41,6 +42,7 @@ namespace FCCH.Common
                 .AddText($" {message}")
                 .Build();
             Plugin.Chat.Print(seString);
+#endif
         }
 
         public static void Warning(string message)
@@ -67,8 +69,10 @@ namespace FCCH.Common
 
         public static void Verbose(string message)
         {
+#if DEBUG
             if (!Plugin.Configuration.VerboseMode) return;
             Reply(message);
+#endif
         }
 
         public static void PrintBatchWarnings(System.Collections.Generic.Dictionary<string, int> failures)

@@ -119,8 +119,10 @@ namespace FCCH.Managers
                 return;
             }
 
+#if DEBUG
             if (_configuration.VerboseMode)
                 ChatHelper.Info($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
+#endif
             
             if (_configuration.DebugMode)
                 DebugLog($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) Native={op.IsNativeMove}");

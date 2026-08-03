@@ -15,6 +15,7 @@ namespace FCCH.Common
 
         private const double WindowSeconds = 1.0;
 
+        [Conditional("DEBUG")]
         public static void RecordOnUpdate(long elapsedTicks)
         {
             if (!IsEnabled()) return;
@@ -25,24 +26,28 @@ namespace FCCH.Common
             }
         }
 
+        [Conditional("DEBUG")]
         public static void RecordUpdateChestState()
         {
             if (!IsEnabled()) return;
             lock (_gate) { _updateChestStateCalls++; }
         }
 
+        [Conditional("DEBUG")]
         public static void RecordScanFCChest()
         {
             if (!IsEnabled()) return;
             lock (_gate) { _scanFCChestCalls++; }
         }
 
+        [Conditional("DEBUG")]
         public static void RecordOpLockDetour()
         {
             if (!IsEnabled()) return;
             lock (_gate) { _opLockDetourCalls++; }
         }
 
+        [Conditional("DEBUG")]
         public static void TickAndMaybeFlush()
         {
             if (!IsEnabled()) return;
@@ -54,14 +59,19 @@ namespace FCCH.Common
                 var elapsed = (now - _windowStartUtc).TotalSeconds;
                 if (elapsed < WindowSeconds) return;
 
-                double avgUs = 0;
-                if (_onUpdateSamples > 0)
-                {
-                    double totalMs = _onUpdateTicksAccumulator * 1000.0 / Stopwatch.Frequency;
-                    avgUs = (totalMs * 1000.0) / _onUpdateSamples;
-                }
+                bool hadActivity = _updateChestStateCalls > 0 || _scanFCChestCalls > 0 || _opLockDetourCalls > 0;
 
-                line = $"[Perf] win={elapsed:F2}s onUpdate avg={avgUs:F1}us samples={_onUpdateSamples} | UpdateChestState/s={_updateChestStateCalls / elapsed:F2} ScanFCChest/s={_scanFCChestCalls / elapsed:F2} OpLock/s={_opLockDetourCalls / elapsed:F2}";
+                if (hadActivity)
+                {
+                    double avgUs = 0;
+                    if (_onUpdateSamples > 0)
+                    {
+                        double totalMs = _onUpdateTicksAccumulator * 1000.0 / Stopwatch.Frequency;
+                        avgUs = (totalMs * 1000.0) / _onUpdateSamples;
+                    }
+
+                    line = $"[Perf] win={elapsed:F2}s onUpdate avg={avgUs:F1}us samples={_onUpdateSamples} | UpdateChestState/s={_updateChestStateCalls / elapsed:F2} ScanFCChest/s={_scanFCChestCalls / elapsed:F2} OpLock/s={_opLockDetourCalls / elapsed:F2}";
+                }
 
                 _onUpdateTicksAccumulator = 0;
                 _onUpdateSamples = 0;
@@ -71,13 +81,19 @@ namespace FCCH.Common
                 _windowStartUtc = now;
             }
 
-            try { FCCHLog.Info(line); } catch { }
+            if (line == null) return;
+
+            try { FCCHLog.Verbose(line); } catch { }
         }
 
         private static bool IsEnabled()
         {
+#if DEBUG
             try { return Plugin.Configuration?.DebugMode == true; }
             catch { return false; }
+#else
+            return false;
+#endif
         }
     }
 }

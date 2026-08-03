@@ -55,6 +55,14 @@ namespace FCCH
             bool isFreshInstall = savedConfig == null;
             Configuration = savedConfig ?? new Configuration();
             Configuration.Initialize(PluginInterface);
+#if !DEBUG
+            if (Configuration.DebugMode || Configuration.VerboseMode)
+            {
+                Configuration.DebugMode = false;
+                Configuration.VerboseMode = false;
+                Configuration.Save();
+            }
+#endif
 
             WorkshopCache = new WorkshopCache(Data, PluginLog);
             ChestHelper = new ChestHelper(Configuration);
@@ -257,13 +265,11 @@ namespace FCCH
                 case "aprobe":
                     ChatHelper.Reply(ChestHelper.DumpAccessProbe());
                     break;
-#endif
                 case "debug":
                     Configuration.DebugMode = !Configuration.DebugMode;
                     Configuration.Save();
                     ChatHelper.Reply($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
                     break;
-#if DEBUG
                 case "whatsnew":
                     WhatsNewWindow.IsOpen = true;
                     break;

@@ -44,6 +44,9 @@ namespace FCCH.Managers.Organizer
         private uint _lastSrcOriginalQty;
         private uint _lastMovedQty;
 
+        private (ExecutorState State, int WithdrawIndex, int DepositIndex)? _lastLoggedTick;
+        private (InventoryType Type, uint Slot, uint Quantity)? _lastLoggedGhost;
+
         public OrgJobStatus Status => _state switch
         {
             ExecutorState.Idle => OrgJobStatus.Idle,
@@ -101,6 +104,8 @@ namespace FCCH.Managers.Organizer
             _lastSrcItemId = 0;
             _lastSrcOriginalQty = 0;
             _lastMovedQty = 0;
+            _lastLoggedTick = null;
+            _lastLoggedGhost = null;
 
             StatusMessage = "Starting job...";
             DebugLog($"Job started. Withdraws={_currentJob.WithdrawMoves?.Count ?? 0}, Deposits={_currentJob.DepositMoves?.Count ?? 0}");
@@ -143,7 +148,12 @@ namespace FCCH.Managers.Organizer
                 return;
             }
 
-            DebugLog($"Update tick: State={_state}, WithdrawIdx={_withdrawIndex}, DepositIdx={_depositIndex}");
+            var tick = (_state, _withdrawIndex, _depositIndex);
+            if (_lastLoggedTick != tick)
+            {
+                _lastLoggedTick = tick;
+                DebugLog($"Update tick: State={_state}, WithdrawIdx={_withdrawIndex}, DepositIdx={_depositIndex}");
+            }
 
             switch (_state)
             {
@@ -262,7 +272,12 @@ namespace FCCH.Managers.Organizer
                 {
                     if (_lastMovedQty >= _lastSrcOriginalQty && currentQty == _lastSrcOriginalQty)
                     {
-                        DebugLog($"Ignoring Ghost Slot {type}:{slot} (Qty {currentQty}). Waiting for memory update.");
+                        var ghost = (type, slot, currentQty);
+                        if (_lastLoggedGhost != ghost)
+                        {
+                            _lastLoggedGhost = ghost;
+                            DebugLog($"Ignoring Ghost Slot {type}:{slot} (Qty {currentQty}). Waiting for memory update.");
+                        }
                         return true;
                     }
                 }
