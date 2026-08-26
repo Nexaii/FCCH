@@ -19,6 +19,8 @@ namespace FCCH.Common
             10373, // Magitek Repair Materials
         };
 
+        public const uint CurrencySortCategoryId = 3;
+
         public const string FreeCompanyChestAddonName = "FreeCompanyChest";
         public const string InputNumericAddonName = "InputNumeric";
         public const string ItemDetailAddonName = "ItemDetail";

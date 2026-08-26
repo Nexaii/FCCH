@@ -97,8 +97,8 @@ namespace FCCH.UI
                         ImGui.PopID();
                     }
                 }
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
 
             ImGui.Spacing();
 
@@ -147,8 +147,8 @@ namespace FCCH.UI
                         }
                     }
                 }
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
 
             DrawSearchBox();
 

@@ -159,8 +159,8 @@ namespace FCCH.UI
                 if (!gate.CanRun) ImGui.EndDisabled();
                 if (!gate.CanRun && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(gate.Reason);
 
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
         }
 
         private uint _editingCell;

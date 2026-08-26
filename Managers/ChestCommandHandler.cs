@@ -46,7 +46,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit.");
-            else ChatHelper.Info("No items to deposit.");
+            else MoveReport.Idle("No items to deposit.");
         }
 
         public void WithdrawAll()
@@ -87,7 +87,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal.");
-            else ChatHelper.Info("No items to withdraw.");
+            else MoveReport.Idle("No items to withdraw.");
         }
 
         private void ReportSkippedTabs(string command, Func<byte, bool> allowed)
@@ -159,11 +159,8 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (OperationManager.LastDepositOverflow.Count > 0)
-                ChatHelper.Warning($"{OperationManager.LastDepositOverflow.Count} item(s) skipped - Tab {tab} full.");
-
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit to Tab {tab}.");
-            else ChatHelper.Info($"No items to deposit to Tab {tab}.");
+            else MoveReport.Idle($"No items to deposit to Tab {tab}.");
         }
 
         public void DepositItemToTab(InventoryType srcType, uint srcSlot, InventoryType destTab)
@@ -186,10 +183,8 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (OperationManager.LastDepositOverflow.Count > 0)
-                ChatHelper.Warning($"Item skipped - Tab {tab} full.");
-            else if (moves.Count == 0)
-                ChatHelper.Info($"Nothing to deposit to Tab {tab}.");
+            if (moves.Count == 0)
+                MoveReport.Idle($"Nothing to deposit to Tab {tab}.");
         }
 
         public void WithdrawItemStack(InventoryType srcPage, uint srcSlot, uint itemId, int amount)
@@ -219,7 +214,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count == 0)
-                ChatHelper.Info("Nothing to withdraw.");
+                MoveReport.Idle("Nothing to withdraw.");
         }
 
         public void DepositDuplicates()
@@ -237,7 +232,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} duplicates for deposit.");
-            else ChatHelper.Info("No duplicates to deposit.");
+            else MoveReport.Idle("No duplicates to deposit.");
         }
 
         public void WithdrawFromTab(int tab)
@@ -276,7 +271,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal from Tab {tab}.");
-            else ChatHelper.Info($"No items to withdraw from Tab {tab}.");
+            else MoveReport.Idle($"No items to withdraw from Tab {tab}.");
         }
 
         public void WithdrawMaterials(Dictionary<uint, int> items)
@@ -292,7 +287,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for workshop withdrawal.");
-            else ChatHelper.Info("No materials found to withdraw.");
+            else MoveReport.Idle("No materials found to withdraw.");
         }
 
         public void DepositMaterials(Dictionary<uint, int> items)
@@ -314,7 +309,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} requested items for deposit.");
-            else ChatHelper.Info("No requested items to deposit.");
+            else MoveReport.Idle("No requested items to deposit.");
         }
 
         public void DepositCustomItems()
@@ -337,7 +332,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for deposit.");
-            else ChatHelper.Info("No custom items to deposit.");
+            else MoveReport.Idle("No custom items to deposit.");
         }
 
         public void WithdrawCustomItems()
@@ -360,7 +355,7 @@ namespace FCCH.Managers
             }
 
             if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for withdrawal.");
-            else ChatHelper.Info("No custom items to withdraw.");
+            else MoveReport.Idle("No custom items to withdraw.");
         }
 
         private Dictionary<uint, int> BuildCustomItemAmounts(Func<WithdrawItem, bool> include, bool deposit)

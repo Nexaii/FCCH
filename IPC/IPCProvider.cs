@@ -147,7 +147,7 @@ public sealed class IPCProvider : IDisposable
     private bool QueueGil(string name, string amount, Action<string> action)
     {
         if (!CanQueue() || !_gilManager.IsValidAmountSyntax(amount)) { LogRefused(name); return false; }
-        _chestHelper.ProcessCommand(() => action(amount));
+        _chestHelper.RunGilCommand(() => action(amount));
         LogAccepted(name);
         return true;
     }

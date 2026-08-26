@@ -34,11 +34,6 @@ namespace FCCH.Managers.Gil
             uint finalAmount = (uint)Math.Min((long)requestedAmount, (long)maxDepositable);
             finalAmount = (uint)Math.Min((long)finalAmount, (long)fcRoomLeft);
 
-            if (finalAmount < requestedAmount)
-            {
-                ChatHelper.Verbose($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
-            }
-
             return new GilValidationResult { IsValid = true, AdjustedAmount = finalAmount, ErrorMessage = "" };
         }
 

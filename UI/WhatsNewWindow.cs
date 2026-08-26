@@ -44,6 +44,12 @@ namespace FCCH.UI
                 ImGui.Indent(indent);
                 foreach (var detail in entry.Details)
                 {
+                    if (detail.Length == 0)
+                    {
+                        ImGui.Spacing();
+                        continue;
+                    }
+
                     ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + wrap);
                     ImGui.TextUnformatted("· " + detail);
                     ImGui.PopTextWrapPos();

@@ -47,7 +47,7 @@ namespace FCCH
         private WhatsNewWindow WhatsNewWindow { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
-        private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, all";
+        private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, 50%, all";
 
         public Plugin()
         {
@@ -55,6 +55,11 @@ namespace FCCH
             bool isFreshInstall = savedConfig == null;
             Configuration = savedConfig ?? new Configuration();
             Configuration.Initialize(PluginInterface);
+            if (Configuration.GilMode == GilDepositMode.Disabled)
+            {
+                Configuration.GilMode = GilDepositMode.Percentage;
+                Configuration.Save();
+            }
 #if !DEBUG
             if (Configuration.DebugMode || Configuration.VerboseMode)
             {
@@ -64,12 +69,20 @@ namespace FCCH
             }
 #endif
 
+            var ineligible = ItemListEligibility.RemoveIneligible(Configuration);
+            if (ineligible.Count > 0)
+            {
+                Configuration.Save();
+                FCCHLog.Info($"Removed {ineligible.Count} entries that cannot be stored in an FC chest: {string.Join(", ", ineligible)}");
+            }
+
             WorkshopCache = new WorkshopCache(Data, PluginLog);
             ChestHelper = new ChestHelper(Configuration);
             WorkshoppaIPC = new WorkshoppaIPC(PluginInterface);
 
             OpLockManager = new OpLockManager(Configuration);
             GilManager = new GilManager(Configuration, ChestHelper.ChestManager, ChestHelper.MoveManager);
+            ChestHelper.Gil = GilManager;
             IPC = new IPCProvider(PluginInterface, ChestHelper, GilManager);
             
             WindowSystem = new Dalamud.Interface.Windowing.WindowSystem("FCCH");
@@ -243,12 +256,15 @@ namespace FCCH
                     break;
 #endif
                 case "gd":
-                    ChestHelper.ProcessCommand(() => GilManager.HandleDepositCommand(parts.Length > 1 ? parts[1] : ""));
+                    ChestHelper.RunGilCommand(() => GilManager.HandleDepositCommand(parts.Length > 1 ? parts[1] : ""));
                     break;
                 case "gw":
-                    ChestHelper.ProcessCommand(() => GilManager.HandleWithdrawCommand(parts.Length > 1 ? parts[1] : ""));
+                    ChestHelper.RunGilCommand(() => GilManager.HandleWithdrawCommand(parts.Length > 1 ? parts[1] : ""));
                     break;
 #if DEBUG
+                case "simchat":
+                    Managers.ChatSim.Run(ChestHelper.MoveManager);
+                    break;
                 case "gildebug":
                     GilManager.EnableDebugMode();
                     break;

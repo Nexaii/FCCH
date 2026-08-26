@@ -20,10 +20,44 @@ namespace FCCH.UI
         private const string NumericColumnSample = "12345678";
 
         private string _searchFilter = "";
+        private string _listFilter = "";
+        private bool _showClearConfirm = false;
+
+        private Item[] _searchResults = Array.Empty<Item>();
+        private string _lastSearch = "";
+
+        private readonly List<CategoryResolver.CategoryMatch> _categoryResults = new();
+        private CategoryResolver.CategoryMatch _pendingCategory;
+        private CategoryResolver.CategoryMatch? _clickedCategory;
+        private bool _showCategoryConfirm = false;
+
+        private readonly List<(WithdrawItem Item, int Index, string Name)> _visible = new();
+        private List<WithdrawItem> _viewSource = new();
+        private string _viewFilter = "";
+        private int _viewCount = -1;
+        private string _countText = "";
 
         private string _presetNameInput = "";
         private string _selectedPresetName = "";
         private bool _showSavePresetModal = false;
+
+        private readonly UndoStack<WithdrawItem> _undo = new(x => x.Clone());
+        private readonly BulkPaint _paint = new();
+        private CustomItemMode _paintMode;
+        private bool _paintMax;
+        private int _paintCount;
+
+        private int _qtyBefore;
+        private bool _qtyCaptured;
+
+        private int _modeRevision;
+        private int _viewRevision = -1;
+        private CustomItemMode _headerMode;
+        private bool _headerModeMixed;
+        private bool _headerMax;
+        private bool _headerMaxMixed;
+        private bool _showHeaderModeConfirm;
+        private bool _showHeaderMaxConfirm;
 
         public CustomTab(ChestHelper helper, Configuration configuration)
         {
@@ -34,78 +68,291 @@ namespace FCCH.UI
         public void Draw()
         {
             DrawPresets();
+            DrawSearchBox();
             ImGui.Separator();
 
-            int totalQty = _configuration.WithdrawItems.Sum(x => x.Quantity);
             int itemCount = _configuration.WithdrawItems.Count;
+            _paint.BeginFrame();
+            RefreshView();
 
-            if (ImGui.BeginTable("##customHeader", 2))
+            DrawListHeader(itemCount);
+
+            if (ImGui.BeginChild("CustomItemsList", new Vector2(0, ImGui.GetContentRegionAvail().Y), true))
             {
-                ImGui.TableSetupColumn("##label", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("##btn", ImGuiTableColumnFlags.WidthFixed, 80);
-                ImGui.TableNextRow();
-
-                ImGui.TableNextColumn();
-                ImGui.TextDisabled($"Custom List ({itemCount} items, {totalQty:N0} total)");
-
-                ImGui.TableNextColumn();
-                if (itemCount > 0)
+                if (itemCount == 0)
                 {
-                    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
-                    if (ImGui.Button("Clear List", new Vector2(-1, 0)))
-                    {
-                        _configuration.WithdrawItems.Clear();
-                        _configuration.Save();
-                    }
-                    ImGui.PopStyleColor();
+                    ImGui.TextDisabled("No items in custom list. Use the search box above to add items.");
                 }
-                ImGui.EndTable();
-            }
-
-            float footerHeight = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y * 2;
-
-            if (_configuration.WithdrawItems.Count == 0)
-            {
-                ImGui.BeginChild("CustomItemsList", new Vector2(0, -footerHeight), true);
-                ImGui.TextDisabled("No items in custom list. Use search below to add items.");
-                ImGui.EndChild();
-            }
-            else
-            {
-                if (ImGui.BeginChild("CustomItemsList", new Vector2(0, -footerHeight), true))
+                else if (_visible.Count == 0)
                 {
-                    if (ImGui.BeginTable("CustomItemsTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+                    ImGui.TextDisabled($"No item in your list matches \"{_listFilter}\". Use the search box above to add it.");
+                }
+                else if (ImGui.BeginTable("CustomItemsTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY))
+                {
+                    float numericColumnWidth = ImGui.CalcTextSize(NumericColumnSample).X + ImGui.GetStyle().FramePadding.X * 2;
+
+                    ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
+                    ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
+                    ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                    ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                    ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
+                    DrawTableHeaders();
+
+                    var clipper = ImGui.ImGuiListClipper();
+                    clipper.Begin(_visible.Count);
+                    while (clipper.Step())
                     {
-                        float numericColumnWidth = ImGui.CalcTextSize(NumericColumnSample).X + ImGui.GetStyle().FramePadding.X * 2;
-
-                        ImGui.TableSetupColumn("Item", ImGuiTableColumnFlags.WidthStretch);
-                        ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
-                        ImGui.TableSetupColumn("Have", ImGuiTableColumnFlags.WidthFixed, numericColumnWidth);
-                        ImGui.TableSetupColumn("Mode", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
-                        ImGui.TableSetupColumn("Max", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
-                        ImGui.TableSetupColumn("##del", ImGuiTableColumnFlags.WidthFixed, CellActionButton.ColumnWidth);
-                        ImGui.TableHeadersRow();
-
-                        var sortedItems = _configuration.WithdrawItems
-                            .Select((item, idx) => new { Item = item, Index = idx, Name = _helper.GetItemName(item.ItemId) })
-                            .OrderBy(x => x.Name)
-                            .ToList();
-
-                        foreach (var gItem in sortedItems)
+                        for (var i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                         {
-                            ImGui.PushID($"c_item_{gItem.Index}");
-                            DrawItemRow(gItem.Item, gItem.Index, gItem.Name);
+                            if (i < 0) continue;
+
+                            var row = _visible[i];
+                            ImGui.PushID($"c_item_{row.Index}");
+                            DrawItemRow(row.Item, row.Index, row.Name, i);
                             ImGui.PopID();
                         }
-                        ImGui.EndTable();
                     }
-                    ImGui.EndChild();
+                    clipper.End();
+                    clipper.Destroy();
+
+                    ImGui.EndTable();
+
+                    FinishPaint();
                 }
             }
-
-            DrawSearchBox();
+            ImGui.EndChild();
 
             DrawSavePresetModal();
+
+            if (_showCategoryConfirm)
+            {
+                var body = $"Add all {_pendingCategory.Count:N0} items in {_pendingCategory.Name} to your custom list?\n\nThey will be set to Withdraw, quantity 1.";
+                if (ListChrome.DrawConfirm("Add category", body, $"Add {_pendingCategory.Count:N0}", ref _showCategoryConfirm))
+                    AddCategory(_pendingCategory);
+            }
+
+            if (_showHeaderModeConfirm)
+            {
+                var target = GetModeLabel(NextHeaderMode());
+                if (ListChrome.DrawConfirm("Set mode", $"Set all {_visible.Count:N0} shown items to {target}?", $"Set {_visible.Count:N0}", ref _showHeaderModeConfirm))
+                    ApplyHeaderMode();
+            }
+
+            if (_showHeaderMaxConfirm)
+            {
+                var target = NextHeaderMax() ? "Max" : "a set quantity";
+                if (ListChrome.DrawConfirm("Set max", $"Set all {_visible.Count:N0} shown items to {target}?", $"Set {_visible.Count:N0}", ref _showHeaderMaxConfirm))
+                    ApplyHeaderMax();
+            }
+
+            if (ListChrome.DrawConfirm("Clear Custom List", $"Remove all {itemCount} items from the custom list?", "Clear List", ref _showClearConfirm))
+            {
+                _undo.Capture(_configuration.WithdrawItems, $"Clear list ({itemCount:N0} items)");
+                _configuration.WithdrawItems.Clear();
+                _listFilter = "";
+                _configuration.Save();
+            }
+        }
+
+        private void Undo()
+        {
+            _configuration.WithdrawItems = _undo.Pop();
+            _configuration.Save();
+        }
+
+        private void RefreshView()
+        {
+            var source = _configuration.WithdrawItems;
+
+            if (ReferenceEquals(_viewSource, source) && _viewCount == source.Count && _viewFilter == _listFilter && _viewRevision == _modeRevision)
+                return;
+
+            _viewSource = source;
+            _viewCount = source.Count;
+            _viewFilter = _listFilter;
+            _viewRevision = _modeRevision;
+
+            _visible.Clear();
+            for (var i = 0; i < source.Count; i++)
+            {
+                var name = _helper.GetItemName(source[i].ItemId);
+                if (_listFilter.Length > 0 && !name.Contains(_listFilter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                _visible.Add((source[i], i, name));
+            }
+
+            _visible.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            _countText = ListChrome.CountText(_visible.Count, _viewCount);
+            RefreshHeaderState();
+        }
+
+        private void DrawTableHeaders()
+        {
+            ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TableHeader("Item");
+
+            ImGui.TableSetColumnIndex(1);
+            ImGui.TableHeader("Qty");
+
+            ImGui.TableSetColumnIndex(2);
+            ImGui.TableHeader("Have");
+
+            ImGui.TableSetColumnIndex(3);
+            ImGui.TableHeader("Mode");
+            if (ImGui.IsItemClicked())
+                RequestHeaderMode();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(BulkHeader.Tooltip(_visible.Count, _viewCount, GetModeLabel(NextHeaderMode()), _headerModeMixed));
+
+            ImGui.TableSetColumnIndex(4);
+            ImGui.TableHeader("Max");
+            if (ImGui.IsItemClicked())
+                RequestHeaderMax();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(BulkHeader.Tooltip(_visible.Count, _viewCount, NextHeaderMax() ? "Max" : "a set quantity", _headerMaxMixed));
+
+            ImGui.TableSetColumnIndex(5);
+            ImGui.TableHeader("");
+        }
+
+        private CustomItemMode NextHeaderMode()
+        {
+            return _headerModeMixed ? CustomItemMode.Withdraw : WithdrawItem.NextMode(_headerMode);
+        }
+
+        private bool NextHeaderMax()
+        {
+            return _headerMaxMixed || !_headerMax;
+        }
+
+        private void RequestHeaderMode()
+        {
+            if (_visible.Count > BulkHeader.ConfirmThreshold)
+                _showHeaderModeConfirm = true;
+            else
+                ApplyHeaderMode();
+        }
+
+        private void RequestHeaderMax()
+        {
+            if (_visible.Count > BulkHeader.ConfirmThreshold)
+                _showHeaderMaxConfirm = true;
+            else
+                ApplyHeaderMax();
+        }
+
+        private void ApplyHeaderMode()
+        {
+            var target = NextHeaderMode();
+            _undo.Capture(_configuration.WithdrawItems, "");
+
+            var changed = 0;
+            for (var i = 0; i < _visible.Count; i++)
+            {
+                if (_visible[i].Item.Mode == target)
+                    continue;
+
+                _visible[i].Item.Mode = target;
+                changed++;
+            }
+
+            if (changed == 0)
+            {
+                _undo.Discard();
+                return;
+            }
+
+            _undo.Relabel($"Set {changed:N0} items to {GetModeLabel(target)}");
+            _modeRevision++;
+            _configuration.Save();
+        }
+
+        private void ApplyHeaderMax()
+        {
+            var target = NextHeaderMax();
+            _undo.Capture(_configuration.WithdrawItems, "");
+
+            var changed = 0;
+            for (var i = 0; i < _visible.Count; i++)
+            {
+                if (_visible[i].Item.AlwaysMax == target)
+                    continue;
+
+                _visible[i].Item.AlwaysMax = target;
+                changed++;
+            }
+
+            if (changed == 0)
+            {
+                _undo.Discard();
+                return;
+            }
+
+            _undo.Relabel($"Set {changed:N0} items to {(target ? "Max" : "a set quantity")}");
+            _modeRevision++;
+            _configuration.Save();
+        }
+
+        private void RefreshHeaderState()
+        {
+            _headerModeMixed = false;
+            _headerMaxMixed = false;
+
+            if (_visible.Count == 0)
+                return;
+
+            _headerMode = _visible[0].Item.Mode;
+            _headerMax = _visible[0].Item.AlwaysMax;
+
+            for (var i = 1; i < _visible.Count; i++)
+            {
+                if (_visible[i].Item.Mode != _headerMode)
+                    _headerModeMixed = true;
+
+                if (_visible[i].Item.AlwaysMax != _headerMax)
+                    _headerMaxMixed = true;
+
+                if (_headerModeMixed && _headerMaxMixed)
+                    return;
+            }
+        }
+
+        private void DrawListHeader(int total)
+        {
+            if (!ImGui.BeginTable("##customHeader", 4))
+                return;
+
+            ImGui.TableSetupColumn("##count", ImGuiTableColumnFlags.WidthFixed, ListChrome.CountColumnWidth());
+            ImGui.TableSetupColumn("##filter", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("##undo", ImGuiTableColumnFlags.WidthFixed, ListChrome.ClearButtonWidth);
+            ImGui.TableSetupColumn("##clear", ImGuiTableColumnFlags.WidthFixed, ListChrome.ClearButtonWidth);
+            ImGui.TableNextRow();
+
+            ImGui.TableNextColumn();
+            ListChrome.DrawCount(_countText);
+
+            ImGui.TableNextColumn();
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputTextWithHint("##customListFilter", "Filter your list...", ref _listFilter, 64);
+
+            ImGui.TableNextColumn();
+            if (ListChrome.DrawUndoButton(_undo))
+                Undo();
+
+            ImGui.TableNextColumn();
+            if (total > 0)
+            {
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
+                if (ImGui.Button("Clear List", new Vector2(-1, 0)))
+                    _showClearConfirm = true;
+                ImGui.PopStyleColor();
+            }
+
+            ImGui.EndTable();
         }
 
         private void DrawSearchBox()
@@ -114,38 +361,48 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, new Vector4(0.2f, 0.2f, 0.2f, 1f));
 
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-            if (ImGui.BeginCombo("##addItemSearch", "Search and add items...", ImGuiComboFlags.HeightLarge))
+            if (ImGui.BeginCombo("##addItemSearch", "Search items or categories...", ImGuiComboFlags.HeightLarge))
             {
                 ImGui.PopStyleColor(2);
                 ImGui.SetNextItemWidth(-1);
                 ImGui.InputText("##searchIn", ref _searchFilter, 64);
-                var sheet = Plugin.Data.GetExcelSheet<Item>();
+                UpdateSearchCache();
 
-                if (sheet != null && !string.IsNullOrEmpty(_searchFilter))
+                if (_categoryResults.Count > 0)
                 {
-                    var filtered = sheet.Where(i =>
+                    foreach (var category in _categoryResults)
                     {
-                        var name = i.Name.ToString();
-                        if (string.IsNullOrEmpty(name)) return false;
-                        if (!name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)) return false;
-                        return ItemListEligibility.IsAllowed(i);
-                    }).Take(20);
-
-                    if (filtered.Any())
-                    {
-                        foreach (var item in filtered)
+                        if (ImGui.Selectable($"{category.Name}##cat{category.Id}", false))
                         {
-                            if (ImGui.Selectable(item.Name.ToString(), false))
-                            {
-                                AddItem(item);
-                                ImGui.CloseCurrentPopup();
-                            }
+                            _clickedCategory = category;
+                            ImGui.CloseCurrentPopup();
                         }
+
+                        ListChrome.DrawTrailingLabel($"add all {category.Count:N0}");
                     }
-                    else
+
+                    ImGui.Separator();
+                }
+
+                if (_searchResults.Length > 0)
+                {
+                    foreach (var item in _searchResults)
                     {
-                        ImGui.TextDisabled("No results found");
+                        bool alreadyHeld = _configuration.WithdrawItems.Any(x => x.ItemId == item.RowId);
+
+                        if (ImGui.Selectable(item.Name.ToString(), false))
+                        {
+                            AddItem(item);
+                            ImGui.CloseCurrentPopup();
+                        }
+
+                        if (alreadyHeld)
+                            ListChrome.DrawInListMarker();
                     }
+                }
+                else if (_categoryResults.Count == 0)
+                {
+                    ImGui.TextDisabled("No results found");
                 }
                 ImGui.EndCombo();
             }
@@ -153,21 +410,109 @@ namespace FCCH.UI
             {
                 ImGui.PopStyleColor(2);
             }
+
+            if (!_clickedCategory.HasValue)
+                return;
+
+            var clicked = _clickedCategory.Value;
+            _clickedCategory = null;
+
+            if (clicked.Count > BulkHeader.ConfirmThreshold)
+            {
+                _pendingCategory = clicked;
+                _showCategoryConfirm = true;
+                return;
+            }
+
+            AddCategory(clicked);
+        }
+
+        private void UpdateSearchCache()
+        {
+            if (_searchFilter == _lastSearch)
+                return;
+
+            _lastSearch = _searchFilter;
+            CategoryResolver.Match(_searchFilter, _categoryResults);
+            var sheet = Plugin.Data.GetExcelSheet<Item>();
+
+            if (sheet != null && !string.IsNullOrEmpty(_searchFilter))
+            {
+                _searchResults = sheet.Where(i =>
+                {
+                    var name = i.Name.ToString();
+                    if (string.IsNullOrEmpty(name)) return false;
+                    if (!name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)) return false;
+                    return ItemListEligibility.IsAllowed(i);
+                }).Take(20).ToArray();
+            }
+            else
+            {
+                _searchResults = Array.Empty<Item>();
+            }
         }
 
         private void AddItem(Item item)
         {
-            if (!_configuration.WithdrawItems.Any(x => x.ItemId == item.RowId))
+            AddItems(new[] { item.RowId });
+            ClearSearch();
+        }
+
+        private int AddItems(IReadOnlyList<uint> itemIds)
+        {
+            var held = new HashSet<uint>();
+            foreach (var existing in _configuration.WithdrawItems)
+                held.Add(existing.ItemId);
+
+            var added = 0;
+            foreach (var itemId in itemIds)
             {
-                var newItem = new WithdrawItem { ItemId = item.RowId, Quantity = 1 };
-                _configuration.WithdrawItems.Add(newItem);
+                if (!held.Add(itemId))
+                    continue;
+
+                _configuration.WithdrawItems.Add(new WithdrawItem { ItemId = itemId, Quantity = 1 });
+                added++;
+            }
+
+            if (added > 0)
+            {
                 _configuration.WithdrawItems.Sort((a, b) => string.Compare(_helper.GetItemName(a.ItemId), _helper.GetItemName(b.ItemId), StringComparison.OrdinalIgnoreCase));
                 _configuration.Save();
             }
-            _searchFilter = "";
+
+            return added;
         }
 
-        private void DrawItemRow(WithdrawItem item, int index, string itemName)
+        private void ClearSearch()
+        {
+            _searchFilter = "";
+            _listFilter = "";
+            UpdateSearchCache();
+        }
+
+        private void AddCategory(CategoryResolver.CategoryMatch category)
+        {
+            var ids = CategoryResolver.GetItemIds(category.Id);
+            _undo.Capture(_configuration.WithdrawItems, "");
+            var added = AddItems(ids);
+            var skipped = ids.Count - added;
+
+            if (added == 0)
+                _undo.Discard();
+            else
+                _undo.Relabel($"Add {added:N0} items from {category.Name}");
+
+            if (added == 0)
+                Common.ChatHelper.Info($"All {ids.Count:N0} items from {category.Name} were already in your list.");
+            else if (skipped > 0)
+                Common.ChatHelper.Info($"Added {added:N0} items from {category.Name} ({skipped:N0} already in list).");
+            else
+                Common.ChatHelper.Info($"Added {added:N0} items from {category.Name}.");
+
+            ClearSearch();
+        }
+
+        private void DrawItemRow(WithdrawItem item, int index, string itemName, int visibleRow)
         {
             ImGui.TableNextRow();
 
@@ -191,22 +536,22 @@ namespace FCCH.UI
             var sheetItem = Plugin.Data.GetExcelSheet<Item>()?.GetRow(item.ItemId);
             if (sheetItem != null && sheetItem.Value.StackSize > 999) maxLimit = 9999;
 
-            DrawQuantity(item, maxLimit);
+            DrawQuantity(item, maxLimit, itemName);
 
             ImGui.TableNextColumn();
             DrawHave(item, chestHave, inventoryHave, insufficient);
 
             ImGui.TableNextColumn();
-            DrawModeButton(item);
+            DrawModeButton(item, visibleRow);
 
             ImGui.TableNextColumn();
-            DrawMaxToggle(item, index);
+            DrawMaxToggle(item, index, visibleRow);
 
             ImGui.TableNextColumn();
             DrawDeleteButton(index);
         }
 
-        private void DrawQuantity(WithdrawItem item, int maxLimit)
+        private void DrawQuantity(WithdrawItem item, int maxLimit, string itemName)
         {
             if (item.AlwaysMax)
             {
@@ -217,12 +562,34 @@ namespace FCCH.UI
 
             int qty = item.Quantity;
             ImGui.SetNextItemWidth(-1);
-            if (ImGui.InputInt("##qty", ref qty, 0))
+            var edited = ImGui.InputInt("##qty", ref qty, 0);
+
+            if (ImGui.IsItemActivated())
+            {
+                _qtyBefore = item.Quantity;
+                _qtyCaptured = false;
+            }
+
+            if (edited)
             {
                 qty = Math.Max(1, qty);
                 qty = Math.Min(maxLimit, qty);
+
+                if (!_qtyCaptured && qty != _qtyBefore)
+                {
+                    item.Quantity = _qtyBefore;
+                    _undo.Capture(_configuration.WithdrawItems, "");
+                    _qtyCaptured = true;
+                }
+
                 item.Quantity = qty;
                 _configuration.Save();
+            }
+
+            if (_qtyCaptured && ImGui.IsItemDeactivated())
+            {
+                _undo.Relabel($"Set {itemName} to {item.Quantity:N0}");
+                _qtyCaptured = false;
             }
         }
 
@@ -255,31 +622,94 @@ namespace FCCH.UI
                 ImGui.SetTooltip(tooltip);
         }
 
-        private void DrawModeButton(WithdrawItem item)
+        private void DrawModeButton(WithdrawItem item, int visibleRow)
         {
-            CellActionButton.DrawIcon(GetModeIcon(item.Mode), "mode", $"{GetModeLabel(item.Mode)}\nClick to cycle mode", () =>
+            var tooltip = _paint.IsOrigin(visibleRow)
+                ? ""
+                : $"{GetModeLabel(item.Mode)}\nClick to cycle mode\nDrag up or down to apply to more rows";
+
+            CellActionButton.DrawIcon(GetModeIcon(item.Mode), "mode", tooltip, () =>
             {
+                _undo.Capture(_configuration.WithdrawItems, $"Set {GetRowName(item)} to {GetModeLabel(WithdrawItem.NextMode(item.Mode))}");
                 item.CycleMode();
+                _modeRevision++;
                 _configuration.Save();
             });
+
+            if (ImGui.IsItemActivated())
+                StartPaint(PaintColumn.Mode, visibleRow, item);
+
+            if (_paint.ShouldPaint(PaintColumn.Mode, visibleRow) && item.Mode != _paintMode)
+            {
+                CaptureOnFirstPaint();
+                item.Mode = _paintMode;
+                _modeRevision++;
+                _paintCount++;
+            }
         }
 
-        private void DrawMaxToggle(WithdrawItem item, int index)
+        private void DrawMaxToggle(WithdrawItem item, int index, int visibleRow)
         {
-            CellActionButton.DrawText("M", $"max{index}", "Always use max available", () =>
+            var tooltip = _paint.IsOrigin(visibleRow)
+                ? ""
+                : "Always use max available\nDrag up or down to apply to more rows";
+
+            CellActionButton.DrawText("M", $"max{index}", tooltip, () =>
             {
+                _undo.Capture(_configuration.WithdrawItems, $"Set {GetRowName(item)} to {(item.AlwaysMax ? "a set quantity" : "Max")}");
                 item.AlwaysMax = !item.AlwaysMax;
+                _modeRevision++;
                 _configuration.Save();
             }, item.AlwaysMax);
+
+            if (ImGui.IsItemActivated())
+                StartPaint(PaintColumn.Max, visibleRow, item);
+
+            if (_paint.ShouldPaint(PaintColumn.Max, visibleRow) && item.AlwaysMax != _paintMax)
+            {
+                CaptureOnFirstPaint();
+                item.AlwaysMax = _paintMax;
+                _modeRevision++;
+                _paintCount++;
+            }
+        }
+
+        private void StartPaint(PaintColumn column, int visibleRow, WithdrawItem item)
+        {
+            _paint.Start(column, visibleRow);
+            _paintMode = item.Mode;
+            _paintMax = item.AlwaysMax;
+            _paintCount = 0;
+        }
+
+        private void CaptureOnFirstPaint()
+        {
+            if (_paintCount == 0)
+                _undo.Capture(_configuration.WithdrawItems, "");
+        }
+
+        private void FinishPaint()
+        {
+            if (!_paint.EndedThisFrame() || _paintCount == 0)
+                return;
+
+            _undo.Relabel($"Paint {_paintCount:N0} items");
+            _configuration.Save();
         }
 
         private void DrawDeleteButton(int index)
         {
             CellActionButton.DrawIcon(FontAwesomeIcon.Minus, "delete", "Remove", () =>
             {
+                _undo.Capture(_configuration.WithdrawItems, $"Remove {GetRowName(_configuration.WithdrawItems[index])}");
                 _configuration.WithdrawItems.RemoveAt(index);
                 _configuration.Save();
             }, true);
+        }
+
+        private string GetRowName(WithdrawItem item)
+        {
+            return _helper.GetItemName(item.ItemId);
         }
 
         private bool IsInsufficient(WithdrawItem item, long chestHave, long inventoryHave)
@@ -413,9 +843,12 @@ namespace FCCH.UI
                 var (result, data) = Common.ExportHelper.Import<List<WithdrawItem>>(Common.ExportHelper.SinglesListPrefix);
                 if (result == Common.ExportHelper.ImportResult.Success && data != null)
                 {
+                    var skipped = data.RemoveAll(x => Common.ItemListEligibility.IsIneligible(x.ItemId));
                     _configuration.WithdrawItems = data;
                     _configuration.Save();
                     Common.ChatHelper.Info($"Imported {data.Count} items to Custom list.");
+                    if (skipped > 0)
+                        Common.ChatHelper.Info($"Skipped {skipped} that cannot be stored in an FC chest.");
                 }
                 else
                 {
@@ -431,7 +864,10 @@ namespace FCCH.UI
             if (_configuration.SinglePresets.TryGetValue(name, out var items))
             {
                 _selectedPresetName = name;
-                _configuration.WithdrawItems = items.Select(x => x.Clone()).ToList();
+                _configuration.WithdrawItems = items
+                    .Where(x => !Common.ItemListEligibility.IsIneligible(x.ItemId))
+                    .Select(x => x.Clone())
+                    .ToList();
                 _configuration.Save();
             }
         }

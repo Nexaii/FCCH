@@ -54,7 +54,7 @@ namespace FCCH.UI
                 MaximumSize = new Vector2(900, 1000)
             };
 
-            _generalTab = new GeneralTab(configuration, _fileDialogManager);
+            _generalTab = new GeneralTab(configuration, _fileDialogManager, helper.ChestManager);
             _ignoreTab = new IgnoreTab(helper, configuration);
             _customTab = new CustomTab(helper, configuration);
             _workshopTab = new WorkshopTab(helper, configuration, cache, workshoppaIPC);

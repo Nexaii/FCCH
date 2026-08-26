@@ -260,13 +260,6 @@ namespace FCCH.Managers
                 }
             }
 
-            if (LastDepositOverflow.Count > 0)
-            {
-                var failureCounts = new Dictionary<string, int>();
-                failureCounts["Inventory/Stack Full"] = LastDepositOverflow.Count;
-                ChatHelper.PrintBatchWarnings(failureCounts);
-            }
-
             moves.Sort((a, b) => a.DstInv.CompareTo(b.DstInv) != 0 ? a.DstInv.CompareTo(b.DstInv) : a.DstSlot.CompareTo(b.DstSlot));
 
             return moves;
@@ -418,13 +411,6 @@ namespace FCCH.Managers
                 }
             }
 
-            if (LastDuplicateOverflow.Count > 0)
-            {
-                var failureCounts = new Dictionary<string, int>();
-                failureCounts["Inventory/Stack Full"] = LastDuplicateOverflow.Count;
-                ChatHelper.PrintBatchWarnings(failureCounts);
-            }
-
             moves.Sort((a, b) => a.DstInv.CompareTo(b.DstInv) != 0 ? a.DstInv.CompareTo(b.DstInv) : a.DstSlot.CompareTo(b.DstSlot));
 
             return moves;
@@ -539,13 +525,6 @@ namespace FCCH.Managers
                     int queued = totalRequested - overflow;
                     FCCHLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
                 }
-            }
-
-            if (LastWithdrawOverflow.Count > 0)
-            {
-                var failureCounts = new Dictionary<string, int>();
-                failureCounts["Player Inventory Full"] = LastWithdrawOverflow.Count;
-                ChatHelper.PrintBatchWarnings(failureCounts);
             }
 
             moves.Sort((a, b) => a.SrcInv.CompareTo(b.SrcInv) != 0 ? a.SrcInv.CompareTo(b.SrcInv) : a.SrcSlot.CompareTo(b.SrcSlot));

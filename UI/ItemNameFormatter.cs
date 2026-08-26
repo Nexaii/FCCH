@@ -13,6 +13,7 @@ namespace FCCH.UI
     internal static class ItemNameFormatter
     {
         private const string Separator = "\u30fb";
+        private static Dictionary<uint, string>? _materiaNames;
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(50);
         private static readonly Regex EnglishLeadingGrade = new(@"^Grade\s+(?<number>\d{1,2})\s+(?<rest>.+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
         private static readonly Regex PrimedEnglishLeadingGrade = new(@"^Primed\s+Grade\s+(?<number>\d{1,2})\s+(?<rest>.+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
@@ -51,39 +52,53 @@ namespace FCCH.UI
 
         private static bool TryCompactMateriaName(uint itemId, out string displayName)
         {
+            _materiaNames ??= BuildMateriaNames();
+
+            if (_materiaNames.TryGetValue(itemId, out var name))
+            {
+                displayName = name;
+                return true;
+            }
+
             displayName = string.Empty;
+            return false;
+        }
+
+        private static Dictionary<uint, string> BuildMateriaNames()
+        {
+            var names = new Dictionary<uint, string>();
 
             try
             {
                 var materiaSheet = Plugin.Data.GetExcelSheet<Materia>();
                 var baseParamSheet = Plugin.Data.GetExcelSheet<BaseParam>();
                 if (materiaSheet == null || baseParamSheet == null)
-                    return false;
+                    return names;
 
                 foreach (var materia in materiaSheet)
                 {
+                    var baseParam = baseParamSheet.GetRowOrDefault(materia.BaseParam.RowId);
+                    var statName = baseParam?.Name.ToString() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(statName))
+                        continue;
+
                     for (var i = 0; i < materia.Item.Count; i++)
                     {
-                        if (materia.Item[i].RowId != itemId)
+                        var id = materia.Item[i].RowId;
+                        if (id == 0)
                             continue;
 
-                        var baseParam = baseParamSheet.GetRowOrDefault(materia.BaseParam.RowId);
-                        var statName = baseParam?.Name.ToString() ?? string.Empty;
-                        if (string.IsNullOrWhiteSpace(statName))
-                            return false;
-
-                        displayName = BuildTrailingTierName(statName, ToRoman(i + 1));
-                        return true;
+                        names.TryAdd(id, BuildTrailingTierName(statName, ToRoman(i + 1)));
                     }
                 }
             }
             catch (Exception ex)
             {
-                FCCHLog.Debug($"[ItemNameFormatter] Materia name lookup failed for item {itemId}: {ex.Message}");
-                return false;
+                FCCHLog.Debug($"[ItemNameFormatter] Materia name table failed: {ex.Message}");
             }
 
-            return false;
+            FCCHLog.Info($"[ItemNameFormatter] Materia name table built with {names.Count} entries.");
+            return names;
         }
 
         private static string BuildTrailingTierName(string baseName, string tier)

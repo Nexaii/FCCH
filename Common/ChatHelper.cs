@@ -56,6 +56,17 @@ namespace FCCH.Common
             Plugin.Chat.Print(seString);
         }
 
+        public static void Alert(string message)
+        {
+            var seString = new SeStringBuilder()
+                .AddUiForeground(ColorYellow)
+                .AddText("[FCCH]")
+                .AddUiForegroundOff()
+                .AddText($" {message}")
+                .Build();
+            Plugin.Chat.Print(seString);
+        }
+
         public static void Error(string message)
         {
             var seString = new SeStringBuilder()
@@ -73,16 +84,6 @@ namespace FCCH.Common
             if (!Plugin.Configuration.VerboseMode) return;
             Reply(message);
 #endif
-        }
-
-        public static void PrintBatchWarnings(System.Collections.Generic.Dictionary<string, int> failures)
-        {
-            if (failures == null || failures.Count == 0) return;
-
-            foreach (var kvp in failures)
-            {
-                Warning($"Failed to process {kvp.Value} items due to: {kvp.Key} (Enable Verbose Mode for details).");
-            }
         }
     }
 }

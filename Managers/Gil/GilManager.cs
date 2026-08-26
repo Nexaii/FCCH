@@ -20,6 +20,8 @@ namespace FCCH.Managers.Gil
         private delegate byte FireCallbackDelegate(AtkUnitBase* addon, int valueCount, AtkValue* values, byte updateState);
         private Hook<FireCallbackDelegate>? _fireCallbackHook;
 
+        private const int PendingTransactionTimeoutMs = 5000;
+
         private static readonly Regex AmountPattern = new(@"^([\d,]+(?:\.\d{1,2})?)([km%])?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public GilManager(Configuration configuration, ChestManager chestManager, MoveManager moveManager)
@@ -48,7 +50,7 @@ namespace FCCH.Managers.Gil
             if (pending == null) return;
 
             var transaction = pending.Value;
-            if (Environment.TickCount64 - transaction.TimestampMs > 5000)
+            if (Environment.TickCount64 - transaction.TimestampMs > PendingTransactionTimeoutMs)
             {
                 _pendingTransaction = null;
                 return;
@@ -82,7 +84,7 @@ namespace FCCH.Managers.Gil
 
             var transaction = pending.Value;
             if (!transaction.IsDeposit) return;
-            if (Environment.TickCount64 - transaction.TimestampMs > 5000)
+            if (Environment.TickCount64 - transaction.TimestampMs > PendingTransactionTimeoutMs)
             {
                 _pendingTransaction = null;
                 return;
@@ -188,21 +190,33 @@ namespace FCCH.Managers.Gil
         {
             _debugMode = true;
             EnableDebugHook();
-            ChatHelper.Info("[GilManager] Debug mode ENABLED. Open Gil Transfer, enter amount, and click OK. Watch chat for callback data.");
+            ChatHelper.Info("Debug mode ENABLED. Open Gil Transfer, enter amount, and click OK. Watch chat for callback data.");
         }
 
         public void DisableDebugMode()
         {
             _debugMode = false;
             DisableDebugHook();
-            ChatHelper.Info("[GilManager] Debug mode disabled.");
+            ChatHelper.Info("Debug mode disabled.");
         }
 
         public string GetPermissionString() => GilValidator.GetPermissionString(_chestManager);
 
+        public void AutoDeposit() => _executor.AutoDeposit();
+
         public void CancelPendingTransaction()
         {
             _pendingTransaction = null;
+        }
+
+        public void TickPendingTransaction()
+        {
+            var pending = _pendingTransaction;
+            if (pending == null) return;
+            if (Environment.TickCount64 - pending.Value.TimestampMs <= PendingTransactionTimeoutMs) return;
+
+            _pendingTransaction = null;
+            ChatHelper.Warning("Gil transfer timed out. No gil moved.");
         }
 
         public bool IsValidAmountSyntax(string args)
@@ -217,7 +231,7 @@ namespace FCCH.Managers.Gil
         {
             if (string.IsNullOrWhiteSpace(args))
             {
-                ChatHelper.Error("Usage: /fcch gd <amount> (e.g., 15k, 5m, all)");
+                ChatHelper.Error("Usage: /fcch gd <amount> (e.g., 15k, 5m, 50%, all)");
                 return;
             }
 
@@ -244,7 +258,7 @@ namespace FCCH.Managers.Gil
         {
             if (string.IsNullOrWhiteSpace(args))
             {
-                ChatHelper.Error("Usage: /fcch gw <amount> (e.g., 15k, 5m, all)");
+                ChatHelper.Error("Usage: /fcch gw <amount> (e.g., 15k, 5m, 50%, all)");
                 return;
             }
 
@@ -305,7 +319,7 @@ namespace FCCH.Managers.Gil
             var match = AmountPattern.Match(input);
             if (!match.Success)
             {
-                error = "Invalid format. Use: 15000, 15k, 15.1k, 15m, or 'all'.";
+                error = "Invalid format. Use: 15000, 15k, 15.1k, 15m, 50%, or 'all'.";
                 return false;
             }
 
@@ -316,6 +330,25 @@ namespace FCCH.Managers.Gil
             {
                 error = "Could not parse numeric value.";
                 return false;
+            }
+
+            if (suffix == "%")
+            {
+                if (baseValue < 1 || baseValue > 100)
+                {
+                    error = "Percentage must be between 1 and 100.";
+                    return false;
+                }
+
+                double source = isDeposit ? playerGil : fcGil;
+                amount = (uint)Math.Floor(source * baseValue / 100);
+
+                if (amount < 1)
+                {
+                    error = $"{baseValue:N0}% of {source:N0} Gil rounds down to nothing.";
+                    return false;
+                }
+                return true;
             }
 
             double multiplier = suffix switch

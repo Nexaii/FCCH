@@ -2,7 +2,7 @@
     "Author": "Nexai",
     "Name": "FCCH",
     "InternalName": "FCCH",
-    "AssemblyVersion": "2.4.6.0",
+    "AssemblyVersion": "2.5.0.0",
     "Description": "Free Company Chest Helper. Automate deposits, withdrawals, organization, crystals, workshop project pulls, and custom item lists.",
     "Punchline": "Automate Free Company chest deposits, withdrawals, organization, and workshop material pulls.",
     "ApplicableVersion": "any",
@@ -26,5 +26,5 @@
     "ImageUrls": [],
     "IconUrl": "https://raw.githubusercontent.com/Nexaii/dalamud-plugins/main/assets/fcch.png",
     "RepoUrl": "https://github.com/Nexaii/FCCH",
-    "Changelog": "Fix: Specific HQ condition bug."
+    "Changelog": "Added: automatic gil deposits. Custom and Ignore lists gain one-click category add, header and drag row editing, and undo. Category idea by FabioFrog91!"
 }

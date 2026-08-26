@@ -7,6 +7,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.GameData;
 using FCCH.Managers;
+using FCCH.Managers.Gil;
 using FCCH.Common;
 using FCCH.Models;
 using FCCH.UI;
@@ -43,6 +44,7 @@ namespace FCCH.Managers
         public bool IsProcessing => MoveManager.IsProcessing || !_indexer.IsIdle;
         public bool IsUserOperationActive => MoveManager.IsProcessing;
         public Func<bool>? ExternalOperationActive { get; set; }
+        public GilManager? Gil { get; set; }
         public List<Models.ShoppingItem> ShoppingList => _configuration.ShoppingItems;
         public bool IsSettingsVisible { get; set; } = false;
         public ItemFilter ItemFilter { get; private set; }
@@ -51,12 +53,15 @@ namespace FCCH.Managers
 
         private bool _wasMoving = false;
         private bool _wasChestOpen = false;
+        private bool _gilSweepPending = false;
+        private bool _gilSweptThisVisit = false;
 
         private System.Action? _pendingCommand;
         private bool _isWaitingForIndex = false;
         private long _indexingCompleteMs;
         private DateTime _pendingCommandQueuedAtUtc = DateTime.MinValue;
         private const int ExecutionDelayMs = 2000;
+        private const int GilSweepQuietMs = 2000;
         private static readonly TimeSpan PendingCommandTimeout = TimeSpan.FromSeconds(15);
 
         public ChestHelper(Configuration configuration)
@@ -98,11 +103,17 @@ namespace FCCH.Managers
             var addon = Common.ChestAddon.GetOpen();
             var isChestOpen = addon != null;
 
-            if (_wasChestOpen && !isChestOpen && HasAbortableWork())
+            if (_wasChestOpen && !isChestOpen)
             {
-                AbortForClosedChest();
-                _wasChestOpen = false;
-                return;
+                _gilSweepPending = false;
+                _gilSweptThisVisit = false;
+
+                if (HasAbortableWork())
+                {
+                    AbortForClosedChest();
+                    _wasChestOpen = false;
+                    return;
+                }
             }
 
             _wasChestOpen = isChestOpen;
@@ -168,14 +179,22 @@ namespace FCCH.Managers
 
                  ChestManager.ScanFCChest();
                  
-                 ReportOverflow("FC stacks full", OperationManager.LastDepositOverflow);
-                 ReportOverflow("inventory full", OperationManager.LastWithdrawOverflow);
+                 MoveReport.Completed(MoveManager.TakeLastBatch());
 
                 if (!MoveManager.SuppressCompletionSound)
                     SoundHelper.PlayCompletionSound(_configuration);
             }
 
             _wasMoving = currentMoving;
+
+            if (_gilSweepPending && !IsProcessing && Environment.TickCount64 - MoveManager.LastActionMs >= GilSweepQuietMs)
+            {
+                _gilSweepPending = false;
+                _gilSweptThisVisit = true;
+                Gil?.AutoDeposit();
+            }
+
+            Gil?.TickPendingTransaction();
             }
             finally
             {
@@ -231,6 +250,17 @@ namespace FCCH.Managers
                 _pendingCommandQueuedAtUtc = DateTime.UtcNow;
                 InteractWithChest();
             }
+        }
+
+        public void RunGilCommand(System.Action command)
+        {
+            ProcessCommand(() =>
+            {
+                _gilSweepPending = false;
+                _gilSweptThisVisit = true;
+                Gil?.CancelPendingTransaction();
+                command();
+            });
         }
 
         public ActionGateResult CanStartUserAction()
@@ -372,7 +402,11 @@ namespace FCCH.Managers
             return ((uint)item->ItemId, (uint)item->Quantity);
         }
         public void StartIndexing(bool autoDump) => _commandHandler.StartIndexing(autoDump);
-        public void Stop() => _commandHandler.Stop();
+        public void Stop()
+        {
+            _gilSweepPending = false;
+            _commandHandler.Stop();
+        }
 
         private Dictionary<uint, int> BuildWorkshopMaterialList()
         {
@@ -415,14 +449,6 @@ namespace FCCH.Managers
 
         public string GetItemName(uint itemId) => Common.ItemNames.Get(itemId);
 
-        private void ReportOverflow(string reason, List<(uint ItemId, uint Remaining)> overflow)
-        {
-            if (overflow.Count == 0) return;
-            ChatHelper.Warning($"{overflow.Count} item(s) could not be moved ({reason}).");
-            foreach (var (itemId, remaining) in overflow)
-                ChatHelper.Verbose($"  - {GetItemName(itemId)}: {remaining} remaining");
-        }
-        
         public void WithdrawMaterials(Dictionary<uint, int> items) => _commandHandler.WithdrawMaterials(items);
         public void DepositMaterials(Dictionary<uint, int> items) => _commandHandler.DepositMaterials(items);
         public void WithdrawMissingMaterials(Dictionary<uint, int> requiredTotals)
@@ -465,10 +491,14 @@ namespace FCCH.Managers
             MoveManager.Dispose();
             ChestManager.Dispose();
             _refusalWatcher?.Dispose();
+            Gil = null;
         }
         
         private void OnChestOpened(AddonEvent type, AddonArgs args)
         {
+            if (_configuration.GilDepositOnChestOpen && !_gilSweptThisVisit)
+                _gilSweepPending = true;
+
             if (_indexer.IsIdle)
             {
                 FCCHLog.Info("[FCCH] Chest opened. Starting full scan...");

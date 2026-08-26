@@ -26,6 +26,8 @@ namespace FCCH.Managers
         public int RefusedCount { get; private set; } = 0;
         public int SkippedByBlockCount { get; private set; } = 0;
 
+        private (int Succeeded, int Total, int Refused, int Blocked, bool Suppressed)? _lastBatch;
+
         private const int RefusalThreshold = 5;
         private readonly Dictionary<InventoryType, int> _consecutiveRefusalsByTab = new();
         private readonly HashSet<InventoryType> _blockedTabs = new();
@@ -306,16 +308,20 @@ namespace FCCH.Managers
             if (n >= RefusalThreshold) BlockTabAndPrune(tab);
         }
 
+        public (int Succeeded, int Total, int Refused, int Blocked, bool Suppressed)? TakeLastBatch()
+        {
+            var batch = _lastBatch;
+            _lastBatch = null;
+            return batch;
+        }
+
         private void EmitBatchSummaryIfDrained()
         {
             if (MoveQueue.Count != 0) return;
             if (TotalQueued == 0) return;
             int succeeded = CompletedCount - RefusedCount;
             if (succeeded < 0) succeeded = 0;
-            string msg = $"Done. {succeeded}/{TotalQueued} moves completed.";
-            if (RefusedCount > 0) msg += $" {RefusedCount} refused.";
-            if (SkippedByBlockCount > 0) msg += $" {SkippedByBlockCount} skipped (blocked tabs).";
-            if (!SuppressBatchSummary) ChatHelper.Info(msg);
+            _lastBatch = (succeeded, TotalQueued, RefusedCount, SkippedByBlockCount, SuppressBatchSummary);
             TotalQueued = 0;
             CompletedCount = 0;
             RefusedCount = 0;

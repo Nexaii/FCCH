@@ -18,6 +18,17 @@ namespace FCCH
             public string Name { get; set; } = "";
             public bool IgnoreEntrust { get; set; }
             public bool IgnoreWithdraw { get; set; }
+
+            public IgnoredItem Clone()
+            {
+                return new IgnoredItem
+                {
+                    ItemId = ItemId,
+                    Name = Name,
+                    IgnoreEntrust = IgnoreEntrust,
+                    IgnoreWithdraw = IgnoreWithdraw
+                };
+            }
         }
 
         public List<IgnoredItem> IgnoreList { get; set; } = new();
@@ -71,6 +82,9 @@ namespace FCCH
         public int GilPercentage { get; set; } = 100;
         public uint GilFixedAmount { get; set; } = 0;
         public uint GilAlwaysKeep { get; set; } = 0;
+        public uint GilMinimumDeposit { get; set; } = 0;
+        public bool GilPercentAboveKeep { get; set; } = false;
+        public bool GilDepositOnChestOpen { get; set; } = false;
         
         public CrystalConfig CrystalConfig { get; set; } = new();
 
@@ -171,7 +185,12 @@ namespace FCCH
 
         public void CycleMode()
         {
-            Mode = Mode switch
+            Mode = NextMode(Mode);
+        }
+
+        public static CustomItemMode NextMode(CustomItemMode mode)
+        {
+            return mode switch
             {
                 CustomItemMode.Withdraw => CustomItemMode.Deposit,
                 CustomItemMode.Deposit => CustomItemMode.Both,

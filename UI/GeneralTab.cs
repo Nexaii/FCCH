@@ -7,6 +7,9 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Keys;
 using FCCH;
 using FCCH.Common;
+using FCCH.Managers;
+using FCCH.Managers.Gil;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Colors;
 
@@ -16,12 +19,16 @@ namespace FCCH.UI
     {
         private readonly Configuration _configuration;
         private readonly FileDialogManager _fileDialogManager;
+        private readonly ChestManager _chestManager;
         private readonly DragDropHelper<ToolbarButtonConfig> _toolbarButtonDrag = new("FCCHToolbarButton", x => x.Id.ToString());
+        private string _activeGilField = string.Empty;
+        private string _gilFieldBuffer = string.Empty;
 
-        public GeneralTab(Configuration configuration, FileDialogManager fileDialogManager)
+        public GeneralTab(Configuration configuration, FileDialogManager fileDialogManager, ChestManager chestManager)
         {
             _configuration = configuration;
             _fileDialogManager = fileDialogManager;
+            _chestManager = chestManager;
         }
 
         public void Draw()
@@ -94,6 +101,12 @@ namespace FCCH.UI
                 if (DrawSection("Fast Move"))
                 {
                     DrawFastMoveRow();
+                }
+                ImGui.Spacing();
+
+                if (DrawSection("Gil"))
+                {
+                    DrawGilRows();
                 }
                 ImGui.Spacing();
 
@@ -282,8 +295,8 @@ namespace FCCH.UI
                 ImGui.PopStyleColor();
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip("Reset all General settings to their default values.");
 
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
         }
 
         private static readonly VirtualKey[] FastMoveModifiers = { VirtualKey.MENU, VirtualKey.CONTROL, VirtualKey.SHIFT };
@@ -342,6 +355,165 @@ namespace FCCH.UI
                 }
                 ImGui.EndCombo();
             }
+        }
+
+        private static readonly GilDepositMode[] GilModes = { GilDepositMode.Percentage, GilDepositMode.FixedAmount };
+
+        private static string GilModeName(GilDepositMode mode)
+            => mode == GilDepositMode.FixedAmount ? "Fixed Amount" : "Percentage";
+
+        private void DrawGilRows()
+        {
+            DrawSettingRow("Deposit on chest open", () =>
+            {
+                bool onChestOpen = _configuration.GilDepositOnChestOpen;
+                if (ImGui.Checkbox("##gilOnChestOpen", ref onChestOpen))
+                {
+                    _configuration.GilDepositOnChestOpen = onChestOpen;
+                    _configuration.Save();
+                }
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Moves gil with no other action from you.");
+            });
+
+            if (!_configuration.GilDepositOnChestOpen)
+            {
+                DrawGilAlwaysKeepRow();
+                return;
+            }
+
+            DrawSettingRow("Amount", () =>
+            {
+                ImGui.SetNextItemWidth(180);
+                if (ImGui.BeginCombo("##gilMode", GilModeName(_configuration.GilMode)))
+                {
+                    foreach (var mode in GilModes)
+                    {
+                        if (ImGui.Selectable(GilModeName(mode), _configuration.GilMode == mode))
+                        {
+                            _configuration.GilMode = mode;
+                            _configuration.Save();
+                        }
+                    }
+                    ImGui.EndCombo();
+                }
+            });
+
+            if (_configuration.GilMode == GilDepositMode.Percentage)
+            {
+                DrawSettingRow("Deposit", () =>
+                {
+                    int percentage = _configuration.GilPercentage;
+                    ImGui.SetNextItemWidth(180);
+                    if (ImGui.SliderInt("##gilPct", ref percentage, 1, 100, "%d%%"))
+                    {
+                        _configuration.GilPercentage = System.Math.Clamp(percentage, 1, 100);
+                        _configuration.Save();
+                    }
+                });
+
+                DrawSettingRow("Apply % after Always Keep", () =>
+                {
+                    bool aboveKeep = _configuration.GilPercentAboveKeep;
+                    if (ImGui.Checkbox("##gilAboveKeep", ref aboveKeep))
+                    {
+                        _configuration.GilPercentAboveKeep = aboveKeep;
+                        _configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    ImGui.TextDisabled("(?)");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Takes the percentage from what is left after Always Keep, not from your total.");
+                });
+            }
+            else
+            {
+                DrawSettingRow("Deposit", () => DrawGilAmountInput("##gilFixed", _configuration.GilFixedAmount, v => _configuration.GilFixedAmount = v));
+            }
+
+            DrawGilAlwaysKeepRow();
+
+            DrawSettingRow("Minimum move", () =>
+            {
+                DrawGilAmountInput("##gilMinimum", _configuration.GilMinimumDeposit, v => _configuration.GilMinimumDeposit = v);
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Skip the deposit entirely if it would move less than this. 0 disables it.");
+            });
+
+            DrawGilPreview();
+        }
+
+        private void DrawGilPreview()
+        {
+            uint playerGil = GilValidator.GetPlayerGil();
+            if (playerGil == 0)
+            {
+                ImGui.TextDisabled("Not logged in.");
+                return;
+            }
+
+            byte access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
+            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
+            {
+                ImGui.TextDisabled("Your FC rank cannot deposit gil. Nothing moves.");
+                return;
+            }
+
+            uint requested = GilExecutor.CalculateAutoAmount(_configuration, playerGil);
+            var preview = GilValidator.ValidateDeposit(requested, playerGil, GilValidator.GetFCGilHeader(), _configuration.GilAlwaysKeep);
+            if (!preview.IsValid)
+            {
+                ImGui.TextDisabled(preview.ErrorMessage);
+                return;
+            }
+
+            if (preview.AdjustedAmount < _configuration.GilMinimumDeposit)
+            {
+                ImGui.TextDisabled($"Below the {_configuration.GilMinimumDeposit:N0} minimum. Nothing moves.");
+                return;
+            }
+
+            ImGui.TextDisabled($"Deposits {preview.AdjustedAmount:N0}. You keep {playerGil - preview.AdjustedAmount:N0}.");
+        }
+
+        private void DrawGilAlwaysKeepRow()
+        {
+            DrawSettingRow("Always Keep", () =>
+            {
+                DrawGilAmountInput("##gilKeep", _configuration.GilAlwaysKeep, v => _configuration.GilAlwaysKeep = v);
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Gil kept in your own inventory, never deposited. 0 disables it.");
+            });
+        }
+
+        private void DrawGilAmountInput(string id, uint current, System.Action<uint> set)
+        {
+            string text = _activeGilField == id ? _gilFieldBuffer : current.ToString("N0");
+            ImGui.SetNextItemWidth(180);
+            if (ImGui.InputText(id, ref text, 16))
+            {
+                _activeGilField = id;
+                _gilFieldBuffer = KeepGilChars(text, allowSeparator: true);
+            }
+            if (ImGui.IsItemDeactivatedAfterEdit())
+            {
+                ulong.TryParse(KeepGilChars(text, allowSeparator: false), out ulong value);
+                set((uint)System.Math.Min(value, GilValidator.MaxGil));
+                _configuration.Save();
+                _activeGilField = string.Empty;
+            }
+        }
+
+        private static string KeepGilChars(string text, bool allowSeparator)
+        {
+            var kept = new System.Text.StringBuilder(text.Length);
+            foreach (char c in text)
+            {
+                if (char.IsDigit(c) || (allowSeparator && c == ',')) kept.Append(c);
+            }
+            return kept.ToString();
         }
 
         private void DrawSettingRow(string label, System.Action drawControl)

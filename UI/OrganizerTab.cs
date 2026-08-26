@@ -312,8 +312,8 @@ namespace FCCH.UI
                     ImGui.EndTable();
                 }
 
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
 
             ImGui.Spacing();
 
@@ -357,8 +357,8 @@ namespace FCCH.UI
                     }
                     ImGui.EndTable();
                 }
-                ImGui.EndChild();
             }
+            ImGui.EndChild();
 
             if (ImGui.BeginTable("FooterTable", 2, ImGuiTableFlags.None))
             {

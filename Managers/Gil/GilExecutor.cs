@@ -21,34 +21,37 @@ namespace FCCH.Managers.Gil
             _setPendingTransaction = setPendingTransaction;
         }
 
-        public void ExecuteDeposit(uint amount)
+        public void ExecuteDeposit(uint amount, bool quiet = false)
         {
             if (!GilValidator.IsChestOpen())
             {
-                ChatHelper.Error("Company Chest must be open to deposit Gil.");
+                if (!quiet) ChatHelper.Error("Company Chest must be open to deposit Gil.");
                 return;
             }
 
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
             if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
-                ChatHelper.Info("Skipping gd for gil.");
+                if (!quiet) ChatHelper.Info("Skipping gd for gil.");
                 return;
             }
 
             var validationResult = GilValidator.ValidateDeposit(amount, GilValidator.GetPlayerGil(), GilValidator.GetFCGilHeader(), _configuration.GilAlwaysKeep);
             if (!validationResult.IsValid)
             {
-                ChatHelper.Error(validationResult.ErrorMessage);
+                if (!quiet) ChatHelper.Error(validationResult.ErrorMessage);
                 return;
             }
 
             var finalAmount = validationResult.AdjustedAmount;
             if (finalAmount == 0)
             {
-                ChatHelper.Info("No Gil to deposit after applying constraints.");
+                if (!quiet) ChatHelper.Info("No Gil to deposit after applying constraints.");
                 return;
             }
+
+            if (finalAmount < amount)
+                ChatHelper.Verbose($"Amount clamped from {amount:N0} to {finalAmount:N0} due to constraints.");
 
             _setPendingTransaction(new PendingGilTransaction
             {
@@ -121,47 +124,34 @@ namespace FCCH.Managers.Gil
             ChatHelper.Verbose($"Queued withdrawal of {finalAmount:N0} Gil.");
         }
 
+        internal static uint CalculateAutoAmount(Configuration configuration, uint playerGil)
+        {
+            long baseGil = configuration.GilPercentAboveKeep
+                ? Math.Max(0L, (long)playerGil - configuration.GilAlwaysKeep)
+                : playerGil;
+
+            long amount = configuration.GilMode == GilDepositMode.Percentage
+                ? baseGil * Math.Clamp(configuration.GilPercentage, 1, 100) / 100
+                : configuration.GilFixedAmount;
+
+            return amount <= 0 ? 0u : (uint)amount;
+        }
+
         public void AutoDeposit()
         {
             if (_configuration.GilMode == GilDepositMode.Disabled) return;
-            var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
-            if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly) return;
 
-            uint amount = 0;
             uint playerGil = GilValidator.GetPlayerGil();
-
-            if (_configuration.GilMode == GilDepositMode.Percentage)
-            {
-                var pct = Math.Clamp(_configuration.GilPercentage, 1, 100);
-                amount = (uint)(playerGil * pct / 100);
-            }
-            else if (_configuration.GilMode == GilDepositMode.FixedAmount)
-            {
-                amount = _configuration.GilFixedAmount;
-            }
-
+            uint amount = CalculateAutoAmount(_configuration, playerGil);
             if (amount == 0) return;
 
-            var validationResult = GilValidator.ValidateDeposit(amount, playerGil, GilValidator.GetFCGilHeader(), _configuration.GilAlwaysKeep);
-            if (!validationResult.IsValid || validationResult.AdjustedAmount == 0) return;
-
-            _setPendingTransaction(new PendingGilTransaction
+            if (_configuration.GilMinimumDeposit > 0)
             {
-                Amount = validationResult.AdjustedAmount,
-                RequestedAmount = amount,
-                IsDeposit = true,
-                TimestampMs = Environment.TickCount64
-            });
-
-            var bank = (AtkUnitBase*)Plugin.GameGui.GetAddonByName<AtkUnitBase>("Bank", 1);
-            if (bank != null && bank->IsVisible)
-            {
-                FireBankDeposit(bank, validationResult.AdjustedAmount);
+                var clamped = GilValidator.ValidateDeposit(amount, playerGil, GilValidator.GetFCGilHeader(), _configuration.GilAlwaysKeep);
+                if (clamped.AdjustedAmount < _configuration.GilMinimumDeposit) return;
             }
-            else
-            {
-                SwitchToGilTab();
-            }
+
+            ExecuteDeposit(amount, quiet: true);
         }
 
         private static void FireBankDeposit(AtkUnitBase* bank, uint amount)
