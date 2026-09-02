@@ -3,12 +3,21 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
 using FCCH.Common;
 using Lumina.Excel.Sheets;
 
 namespace FCCH.UI
 {
     internal readonly record struct ItemDisplayName(string FullName, string VisibleName, bool ShowTooltip);
+
+    internal enum CompactItemNamePrefix
+    {
+        Grade,
+        Level
+    }
+
+    internal readonly record struct CompactItemNameFamilyRule(CompactItemNamePrefix Prefix, int Number);
 
     internal static class ItemNameFormatter
     {
@@ -26,6 +35,9 @@ namespace FCCH.UI
         private static readonly Regex CompactTrailingLevel = new(@"^(?<rest>.+?)\s*L(?<number>\d{1,2})$", RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
         private static readonly Regex LabeledTrailingLevel = new(@"^(?<rest>.+?)\s+(?:level|niveau|stufe)\s+(?<number>\d{1,2})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
         private static readonly Regex GermanOrdinalTrailingLevel = new(@"^(?<rest>.+?)\s+(?<number>\d{1,2})\.\s*stufe$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
+        private static readonly Regex Whitespace = new(@"\s+", RegexOptions.CultureInvariant | RegexOptions.Compiled, RegexTimeout);
+        private static readonly object FamilyRulesSyncRoot = new();
+        private static IReadOnlyDictionary<uint, CompactItemNameFamilyRule>? _familyRules;
 
         public static ItemDisplayName Format(uint itemId, string fullName, bool enabled, float maxWidth, string suffix = "")
         {
@@ -110,7 +122,7 @@ namespace FCCH.UI
         {
             displayName = string.Empty;
 
-            if (!CompactItemNameFamilyRegistry.TryGetRule(itemId, out var rule))
+            if (!TryGetFamilyRule(itemId, out var rule))
                 return false;
 
             return rule.Prefix switch
@@ -296,6 +308,129 @@ namespace FCCH.UI
             }
 
             return elements;
+        }
+
+        private static bool TryGetFamilyRule(uint itemId, out CompactItemNameFamilyRule rule)
+        {
+            EnsureFamilyRulesLoaded();
+            return _familyRules!.TryGetValue(itemId, out rule);
+        }
+
+        private static void EnsureFamilyRulesLoaded()
+        {
+            if (_familyRules != null)
+                return;
+
+            lock (FamilyRulesSyncRoot)
+            {
+                if (_familyRules != null)
+                    return;
+
+                var nextRules = new Dictionary<uint, CompactItemNameFamilyRule>();
+
+                try
+                {
+                    var englishSheet = Plugin.Data.GetExcelSheet<Item>(ClientLanguage.English);
+                    if (englishSheet != null)
+                    {
+                        foreach (var item in englishSheet)
+                        {
+                            var englishName = item.Name.ToString();
+                            if (string.IsNullOrWhiteSpace(englishName))
+                                continue;
+
+                            if (item.FilterGroup == 18)
+                                continue;
+
+                            if (TryCreateFamilyRule(englishName, out var rule))
+                                nextRules[item.RowId] = rule;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FCCHLog.Error(ex, "[ItemNameFormatter] Family rule rebuild failed.");
+                }
+
+                _familyRules = nextRules;
+            }
+        }
+
+        private static bool TryCreateFamilyRule(string englishName, out CompactItemNameFamilyRule rule)
+        {
+            rule = default;
+
+            var primedGrade = PrimedEnglishLeadingGrade.Match(englishName);
+            if (primedGrade.Success && TryCreateGradeRule(primedGrade, "Primed " + primedGrade.Groups["rest"].Value.Trim(), out rule))
+                return true;
+
+            var grade = EnglishLeadingGrade.Match(englishName);
+            if (grade.Success && TryCreateGradeRule(grade, grade.Groups["rest"].Value.Trim(), out rule))
+                return true;
+
+            var level = EnglishLeadingLevel.Match(englishName);
+            if (level.Success && TryCreateLevelRule(level, level.Groups["rest"].Value.Trim(), out rule))
+                return true;
+
+            return false;
+        }
+
+        private static bool TryCreateGradeRule(Match match, string remainder, out CompactItemNameFamilyRule rule)
+        {
+            rule = default;
+
+            if (!int.TryParse(match.Groups["number"].Value, out var number))
+                return false;
+
+            if (GetGradeFamilyKey(remainder).Length == 0)
+                return false;
+
+            rule = new CompactItemNameFamilyRule(CompactItemNamePrefix.Grade, number);
+            return true;
+        }
+
+        private static bool TryCreateLevelRule(Match match, string remainder, out CompactItemNameFamilyRule rule)
+        {
+            rule = default;
+
+            if (!int.TryParse(match.Groups["number"].Value, out var number))
+                return false;
+
+            if (GetLevelFamilyKey(remainder).Length == 0)
+                return false;
+
+            rule = new CompactItemNameFamilyRule(CompactItemNamePrefix.Level, number);
+            return true;
+        }
+
+        private static string GetGradeFamilyKey(string remainder)
+        {
+            var normalized = NormalizeEnglish(remainder);
+
+            if (normalized == "carbonized matter") return "carbonized-matter";
+            if (normalized == "la noscean topsoil") return "la-noscean-topsoil";
+            if (normalized == "shroud topsoil") return "shroud-topsoil";
+            if (normalized == "thanalan topsoil") return "thanalan-topsoil";
+            if (normalized == "clear prism") return "clear-prism";
+            if (normalized == "dark matter") return "dark-matter";
+            if (normalized.StartsWith("tincture of ", StringComparison.Ordinal)) return "tincture";
+            if (normalized.StartsWith("wheel of ", StringComparison.Ordinal)) return "wheel";
+            if (normalized.StartsWith("primed wheel of ", StringComparison.Ordinal)) return "primed-wheel";
+            if (normalized.StartsWith("feed - ", StringComparison.Ordinal) && normalized.EndsWith(" blend", StringComparison.Ordinal)) return "feed-blend";
+            if (normalized.StartsWith("reisui of ", StringComparison.Ordinal)) return "reisui";
+            if (normalized.EndsWith(" alkahest", StringComparison.Ordinal)) return "alkahest";
+
+            return string.Empty;
+        }
+
+        private static string GetLevelFamilyKey(string remainder)
+        {
+            return NormalizeEnglish(remainder) == "aetherial wheel stand" ? "aetherial-wheel-stand" : string.Empty;
+        }
+
+        private static string NormalizeEnglish(string value)
+        {
+            return Whitespace.Replace(value.Trim().ToLowerInvariant(), " ");
         }
     }
 }

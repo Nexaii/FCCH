@@ -2,12 +2,17 @@ namespace FCCH.Common
 {
     public static class WhatsNew
     {
-        public const int Revision = 3;
+        public const int Revision = 4;
 
         public readonly record struct Entry(string Title, string[] Details);
 
         public static readonly Entry[] Highlights =
         {
+            new("Custom Lists", new[]
+            {
+                "Added the ability to import Artisan and Teamcraft text lists.",
+                "Artisan: Export List. Teamcraft: Copy as Text.",
+            }),
             new("Automatic gil deposits", new[]
             {
                 "Settings, General tab. Choose a percentage or a fixed amount.",

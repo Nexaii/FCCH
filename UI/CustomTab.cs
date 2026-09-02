@@ -840,15 +840,21 @@ namespace FCCH.UI
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.TabHovered]);
             if (ImGui.Button("Import"))
             {
-                var (result, data) = Common.ExportHelper.Import<List<WithdrawItem>>(Common.ExportHelper.SinglesListPrefix);
+                var (result, data, skipped, unmatched) = Common.ExportHelper.ImportItemList();
                 if (result == Common.ExportHelper.ImportResult.Success && data != null)
                 {
-                    var skipped = data.RemoveAll(x => Common.ItemListEligibility.IsIneligible(x.ItemId));
-                    _configuration.WithdrawItems = data;
-                    _configuration.Save();
-                    Common.ChatHelper.Info($"Imported {data.Count} items to Custom list.");
-                    if (skipped > 0)
-                        Common.ChatHelper.Info($"Skipped {skipped} that cannot be stored in an FC chest.");
+                    var ineligible = data.RemoveAll(x => Common.ItemListEligibility.IsIneligible(x.ItemId));
+                    if (data.Count == 0)
+                    {
+                        Common.ChatHelper.Warning("Nothing to import. Every item was skipped.");
+                    }
+                    else
+                    {
+                        _undo.Capture(_configuration.WithdrawItems, $"Import {data.Count:N0} items");
+                        _configuration.WithdrawItems = data;
+                        _configuration.Save();
+                        Common.ChatHelper.Info(BuildImportReport(data.Count, skipped + ineligible, unmatched));
+                    }
                 }
                 else
                 {
@@ -856,7 +862,28 @@ namespace FCCH.UI
                 }
             }
             ImGui.PopStyleColor();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Import from clipboard");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Import FCCH string, Artisan list, or Teamcraft text list (not URL)");
+        }
+
+        private static string BuildImportReport(int imported, int skipped, List<string> unmatched)
+        {
+            var line = $"Imported {imported:N0} items.";
+            if (skipped > 0)
+                line += $" {skipped:N0} skipped, cannot go in an FC chest.";
+            if (unmatched.Count > 0)
+                line += $" Not found: {JoinNames(unmatched)}.";
+            return line;
+        }
+
+        private static string JoinNames(List<string> names)
+        {
+            if (names.Count == 1)
+                return names[0];
+            if (names.Count == 2)
+                return $"{names[0]} and {names[1]}";
+            if (names.Count == 3)
+                return $"{names[0]}, {names[1]} and {names[2]}";
+            return $"{names[0]}, {names[1]} and {names.Count - 2:N0} more";
         }
 
         private void LoadPreset(string name)

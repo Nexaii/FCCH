@@ -76,7 +76,6 @@ namespace FCCH.Managers
 
             ItemFilter = new ItemFilter(Plugin.Data);
 
-            Plugin.GameInteropProvider.InitializeFromAttributes(this);
             Plugin.Framework.Update += OnUpdate;
             Callback.Initialize();
 
