@@ -547,11 +547,11 @@ namespace FCCH.UI
                 _undo.Relabel($"Ignore {added:N0} items from {category.Name}");
 
             if (added == 0)
-                Common.ChatHelper.Info($"All {ids.Count:N0} items from {category.Name} were already ignored.");
+                Chat.Result($"All {ids.Count:N0} from {category.Name} already ignored.");
             else if (skipped > 0)
-                Common.ChatHelper.Info($"Now ignoring {added:N0} items from {category.Name} ({skipped:N0} already ignored).");
+                Chat.Result($"Ignoring +{added:N0} from {category.Name} ({skipped:N0} dupes).");
             else
-                Common.ChatHelper.Info($"Now ignoring {added:N0} items from {category.Name}.");
+                Chat.Result($"Ignoring +{added:N0} from {category.Name}.");
 
             ClearSearch();
         }
@@ -610,11 +610,11 @@ namespace FCCH.UI
             {
                 if (Common.ExportHelper.Export(Common.ExportHelper.IgnoreListPrefix, _helper.Configuration.IgnoreList))
                 {
-                    Common.ChatHelper.Info("Ignore list exported to clipboard.");
+                    Chat.Result("Copied Ignore list to clipboard.");
                 }
                 else
                 {
-                    Common.ChatHelper.Warning("Failed to export ignore list.");
+                    Chat.Warn("Failed to export Ignore list.");
                 }
             }
             ImGui.PopStyleColor();
@@ -631,13 +631,13 @@ namespace FCCH.UI
                     var skipped = data.RemoveAll(x => Common.ItemListEligibility.IsIneligible(x.ItemId));
                     _helper.Configuration.IgnoreList = data;
                     _helper.Configuration.Save();
-                    Common.ChatHelper.Info($"Imported {data.Count} items to Ignore list.");
+                    Chat.Result($"Imported {data.Count} items to Ignore list.");
                     if (skipped > 0)
-                        Common.ChatHelper.Info($"Skipped {skipped} that cannot be stored in an FC chest.");
+                        Chat.Result($"Skipped {skipped} that cannot be stored in an FC chest.");
                 }
                 else
                 {
-                    Common.ChatHelper.Warning(Common.ExportHelper.GetErrorMessage(result, "Ignore"));
+                    Chat.Warn(Common.ExportHelper.GetErrorMessage(result, "Ignore"));
                 }
             }
             ImGui.PopStyleColor();

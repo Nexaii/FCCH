@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
 using FCCH.Models;
+using FCCH.Diagnostics;
 using static FCCH.Common.ItemHelper;
 
 namespace FCCH.Managers.Organizer
@@ -25,7 +26,6 @@ namespace FCCH.Managers.Organizer
 
         private readonly ChestManager _chestManager;
         private readonly MoveManager _moveManager;
-        private readonly Configuration _config;
 
         private ExecutorState _state = ExecutorState.Idle;
         private OrgCheckResult? _currentJob;
@@ -61,19 +61,13 @@ namespace FCCH.Managers.Organizer
 
         public event Action? OnJobCompleted;
 
-        public OrgExecutor(ChestManager chestManager, MoveManager moveManager, Configuration config)
+        public OrgExecutor(ChestManager chestManager, MoveManager moveManager)
         {
             _chestManager = chestManager;
             _moveManager = moveManager;
-            _config = config;
         }
 
-        private void DebugLog(string msg)
-        {
-            if (!_config.DebugMode) return;
-            FCCHLog.Info($"[OrgExecutor] {msg}");
-            ChatHelper.Debug($"[OrgExec] {msg}");
-        }
+        private void DebugLog(string msg) => Log.Debug(msg, "OrgExecutor");
 
         public bool StartJob(OrgCheckResult checkResult)
         {

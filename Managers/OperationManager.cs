@@ -6,6 +6,7 @@ using Lumina.Excel.Sheets;
 using FCCH.Common;
 using FCCH.GameData;
 using FCCH.Models;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -75,7 +76,7 @@ namespace FCCH.Managers
             if (!depositable.Contains(targetTab))
             {
                 int tabNum = ((int)targetTab - (int)InventoryType.FreeCompanyPage1) + 1;
-                ChatHelper.Warning($"Tab {tabNum} is not depositable (permissions or unavailable).");
+                Chat.Warn($"Tab {tabNum}: not depositable (permission / unavailable).");
                 return new List<MoveOperation>();
             }
             return CalculateDepositMovesCore(chestManager, config, playerInvTypes, new List<InventoryType> { targetTab }, sourceSlot: sourceSlot);
@@ -150,7 +151,7 @@ namespace FCCH.Managers
                     }
                     catch (Exception ex)
                     {
-                        FCCHLog.Warning($"[Deposit] IsUntradable lookup failed for Item#{item->ItemId}: {ex.Message}");
+                        Log.Warning($"[Deposit] IsUntradable lookup failed for Item#{item->ItemId}: {ex.Message}");
                     }
 
                     if (isUntradable) continue;
@@ -174,10 +175,8 @@ namespace FCCH.Managers
                         ? stacks.Where(x => x.Quantity < x.MaxStack && x.IsHq == targetHq && allowedTabSet.Contains(x.Page)).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
 
-                    if (config.DebugMode && stacks != null)
-                    {
-                        FCCHLog.Info($"[Deposit] item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}");
-                    }
+                    if (stacks != null)
+                        Log.Debug($"item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}", "Deposit");
 
                     foreach (var stack in partialStacks)
                     {
@@ -316,10 +315,8 @@ namespace FCCH.Managers
                         ? stacks.Where(x => x.Quantity < x.MaxStack && x.IsHq == targetHq).OrderBy(x => x.Page).ThenBy(x => x.Slot).ToList()
                         : new List<ChestManager.ScannedSlot>();
 
-                    if (config.DebugMode && stacks != null)
-                    {
-                        FCCHLog.Info($"[Duplicate] item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}");
-                    }
+                    if (stacks != null)
+                        Log.Debug($"item={item->ItemId} qty={remainingToDeposit} srcHq={isHq} targetHq={targetHq} chestStacks={stacks.Count} matchingPartials={partialStacks.Count}", "Duplicate");
 
                     foreach (var stack in partialStacks)
                     {
@@ -476,10 +473,7 @@ namespace FCCH.Managers
                     }
 
                     uint remainingFromThisSlot = (uint)Math.Min(amountNeeded, (int)availableFromSlot);
-                    if (config.DebugMode)
-                    {
-                        FCCHLog.Info($"[Withdraw] item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}");
-                    }
+                    Log.Debug($"item={itemId} src={chestSlot.Page}:{chestSlot.Slot} stackQty={chestSlot.Quantity} ignoreLeaveOne={ignoreLeaveOneRule} leaveOneCfg={config.LeaveOneItemPerStack} availableAfterRule={availableFromSlot} amountNeeded={amountNeeded} willPull={remainingFromThisSlot}", "Withdraw");
 
                     while (remainingFromThisSlot > 0)
                     {
@@ -519,12 +513,8 @@ namespace FCCH.Managers
                     }
                 }
 
-                if (config.DebugMode)
-                {
-                    int overflow = amountNeeded > 0 ? amountNeeded : 0;
-                    int queued = totalRequested - overflow;
-                    FCCHLog.Info($"[Withdraw/Plan] item={itemId} totalRequested={totalRequested} totalQueued={queued} overflow={overflow}");
-                }
+                int overflow = amountNeeded > 0 ? amountNeeded : 0;
+                Log.Debug($"item={itemId} totalRequested={totalRequested} totalQueued={totalRequested - overflow} overflow={overflow}", "Withdraw");
             }
 
             moves.Sort((a, b) => a.SrcInv.CompareTo(b.SrcInv) != 0 ? a.SrcInv.CompareTo(b.SrcInv) : a.SrcSlot.CompareTo(b.SrcSlot));

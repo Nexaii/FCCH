@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Managers;
 using FCCH.Managers.Organizer;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.UI
 {
@@ -489,12 +490,7 @@ namespace FCCH.UI
             _service.Reset();
         }
 
-        private void DebugLog(string msg)
-        {
-            if (!_config.DebugMode) return;
-            FCCHLog.Info($"[OrganizerTab] {msg}");
-            ChatHelper.Debug($"[OrgTab] {msg}");
-        }
+        private void DebugLog(string msg) => Log.Debug(msg, "OrganizerTab");
 
         public unsafe void Update()
         {

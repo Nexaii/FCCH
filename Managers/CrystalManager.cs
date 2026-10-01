@@ -4,6 +4,7 @@ using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FCCH.Common;
 using FCCH.Models;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -48,39 +49,39 @@ namespace FCCH.Managers
         {
             if (!AllIds.Contains(itemId))
             {
-                ChatHelper.Warning("Tab 6 holds crystals only.");
+                Chat.Warn("Tab 6: crystals only.");
                 return;
             }
 
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals);
             if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
-                ChatHelper.Warning("No deposit permission on the crystals tab.");
+                Chat.Warn("No deposit access on the crystal tab.");
                 return;
             }
 
             InvalidateCache();
             if (!ProcessDeposit(itemId))
-                ChatHelper.Info("Nothing to deposit (at keep amount, none held, or tab full).");
+                Chat.Result("Nothing to deposit (at keep / none / full).");
         }
 
         public void WithdrawSingle(uint itemId)
         {
             if (!AllIds.Contains(itemId))
             {
-                ChatHelper.Warning("Crystal withdraw: not a crystal.");
+                Chat.Warn("Not a crystal.");
                 return;
             }
 
             if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FullAccess)
             {
-                ChatHelper.Warning("No withdraw permission on the crystals tab.");
+                Chat.Warn("No withdraw access on the crystal tab.");
                 return;
             }
 
             InvalidateCache();
             if (!ProcessWithdraw(itemId))
-                ChatHelper.Info("Nothing to withdraw (player at 9999 or chest empty).");
+                Chat.Result("Nothing to withdraw (at 9999 / empty).");
         }
 
         public void Deposit(bool force = false)
@@ -89,8 +90,8 @@ namespace FCCH.Managers
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals);
             if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
-                if (force) ChatHelper.Info("Skipping dc for crystals.");
-                else ChatHelper.Verbose("Skipping da for crystals.");
+                if (force) Chat.Result("Skipped dc (crystals).");
+                else Log.Verbose("Skipping da for crystals.");
                 return;
             }
             InvalidateCache();
@@ -122,8 +123,8 @@ namespace FCCH.Managers
             if (!force && !_configuration.CrystalConfig.IncludeInWithdrawAll) return;
             if (_chestManager.GetChestAccess(InventoryType.FreeCompanyCrystals) != Constants.FCPermissions.FullAccess)
             {
-                if (force) ChatHelper.Info("Skipping wc for crystals.");
-                else ChatHelper.Verbose("Skipping wa for crystals.");
+                if (force) Chat.Result("Skipped wc (crystals).");
+                else Log.Verbose("Skipping wa for crystals.");
                 return;
             }
             InvalidateCache();

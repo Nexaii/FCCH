@@ -5,6 +5,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
 using FCCH.Managers;
 using FCCH.Managers.Gil;
+using FCCH.Diagnostics;
 
 namespace FCCH.IPC;
 
@@ -182,11 +183,11 @@ public sealed class IPCProvider : IDisposable
 
     private static void LogAccepted(string name)
     {
-        try { FCCHLog.Info($"[FCCH.IPC] {name} accepted."); } catch { }
+        try { Log.Info($"[FCCH.IPC] {name} accepted."); } catch { }
     }
 
     private static void LogRefused(string name)
     {
-        try { FCCHLog.Info($"[FCCH.IPC] {name} refused."); } catch { }
+        try { Log.Info($"[FCCH.IPC] {name} refused."); } catch { }
     }
 }

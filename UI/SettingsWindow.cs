@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
@@ -14,6 +13,7 @@ using FCCH.Managers;
 using FCCH.Managers.Organizer;
 
 using Dalamud.Interface.ImGuiFileDialog;
+using FCCH.Diagnostics;
 
 namespace FCCH.UI
 {
@@ -31,21 +31,24 @@ namespace FCCH.UI
         private readonly WorkshopTab _workshopTab;
         private readonly CrystalTabUI _crystalsTab;
         private readonly OrganizerTab _organizerTab;
+        private readonly InfoWindow _infoWindow;
 
         private readonly TitleBarButton _donateButton;
-        private readonly TitleBarButton _settingsLockButton;
-        private readonly TitleBarButton _settingsSnapButton;
-        private bool _snapPending;
+        private readonly TitleBarButton _infoButton;
 
-        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, WorkshoppaIPC workshoppaIPC)
+        public SettingsWindow(ChestHelper helper, WorkshopCache cache, IGameGui gameGui, Configuration configuration, OrgService orgService, WorkshoppaIPC workshoppaIPC, InfoWindow infoWindow)
             : base("FCCH Settings###SettingsWindow", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)
         {
             _helper = helper;
             _gameGui = gameGui;
             _configuration = configuration;
+            _infoWindow = infoWindow;
             _fileDialogManager = new FileDialogManager();
             RespectCloseHotkey = false;
-            
+            AllowPinning = false;
+            AllowClickthrough = false;
+            AllowBackgroundBlur = false;
+
             this.Size = new Vector2(520, 600);
             this.SizeCondition = ImGuiCond.FirstUseEver;
             this.SizeConstraints = new WindowSizeConstraints
@@ -67,61 +70,18 @@ namespace FCCH.UI
                 ShowTooltip = () => ImGui.SetTooltip("Support on Patreon"),
                 Priority = int.MinValue,
                 IconOffset = new Vector2(1.5f, 1),
-                Click = _ => OpenDonateLink(),
+                Click = _ => InfoWindow.OpenLink(InfoWindow.SupportUrl),
                 AvailableClickthrough = true,
             };
 
-            _settingsLockButton = new TitleBarButton
+            _infoButton = new TitleBarButton
             {
-                Icon = _configuration.IsWindowLocked ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen,
-                ShowTooltip = () => ImGui.SetTooltip(_configuration.IsWindowLocked
-                    ? "Settings window is locked to the Company Chest\nClick to unlock and drag freely"
-                    : "Settings window is unlocked\nClick to lock current position"),
-                Priority = 0,
-                Click = _ => ToggleSettingsLock(),
+                Icon = FontAwesomeIcon.InfoCircle,
+                ShowTooltip = () => ImGui.SetTooltip("Changelog, logs, and credits"),
+                Priority = 2,
+                IconOffset = new Vector2(1.5f, 1),
+                Click = _ => _infoWindow.Toggle(),
             };
-
-            _settingsSnapButton = new TitleBarButton
-            {
-                Icon = FontAwesomeIcon.Crosshairs,
-                ShowTooltip = () => ImGui.SetTooltip("Snap Settings window back to the Company Chest"),
-                Priority = 1,
-                Click = _ => SnapSettingsToChest(),
-            };
-        }
-
-        private void OpenDonateLink()
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "https://www.patreon.com/c/Nexairi",
-                    UseShellExecute = true,
-                    Verb = string.Empty,
-                });
-            }
-            catch (Exception ex)
-            {
-                FCCHLog.Warning($"[SettingsWindow] Failed to open donate link: {ex.Message}");
-            }
-        }
-
-        private void ToggleSettingsLock()
-        {
-            _configuration.IsWindowLocked = !_configuration.IsWindowLocked;
-            _configuration.Save();
-            _settingsLockButton.Icon = _configuration.IsWindowLocked ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
-        }
-
-        private void SnapSettingsToChest()
-        {
-            _configuration.IsWindowLocked = true;
-            _configuration.SettingsPosX = -1f;
-            _configuration.SettingsPosY = -1f;
-            _snapPending = true;
-            _configuration.Save();
-            _settingsLockButton.Icon = FontAwesomeIcon.Lock;
         }
 
         public override void PreDraw()
@@ -133,13 +93,9 @@ namespace FCCH.UI
             {
                 TitleBarButtons.Add(_donateButton);
             }
-            if (!TitleBarButtons.Contains(_settingsLockButton))
+            if (!TitleBarButtons.Contains(_infoButton))
             {
-                TitleBarButtons.Add(_settingsLockButton);
-            }
-            if (!TitleBarButtons.Contains(_settingsSnapButton))
-            {
-                TitleBarButtons.Add(_settingsSnapButton);
+                TitleBarButtons.Add(_infoButton);
             }
 
             var fcChestAddon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
@@ -197,18 +153,7 @@ namespace FCCH.UI
             var addon = _gameGui.GetAddonByName<AtkUnitBase>("FreeCompanyChest", 1);
             bool chestVisible = addon != null && addon->IsVisible;
 
-            if (_snapPending)
-            {
-                if (chestVisible)
-                {
-                    var attached = ComputeChestAttachedPosition(addon, ImGui.GetWindowSize().X, _configuration.ListsOnRightSide);
-                    ImGui.SetWindowPos(attached, ImGuiCond.Always);
-                }
-                _configuration.SettingsPosX = -1f;
-                _configuration.SettingsPosY = -1f;
-                _snapPending = false;
-            }
-            else if (_configuration.IsWindowLocked)
+            if (_configuration.IsWindowLocked)
             {
                 if (_configuration.SettingsPosX >= 0 && _configuration.SettingsPosY >= 0)
                 {
@@ -277,12 +222,6 @@ namespace FCCH.UI
                      ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("Ignore"))
-                {
-                    _ignoreTab.Draw();
-                    ImGui.EndTabItem();
-                }
-
                 if (ImGui.BeginTabItem("Crystals"))
                 {
                     _crystalsTab.Draw();
@@ -292,6 +231,12 @@ namespace FCCH.UI
                 if (ImGui.BeginTabItem("Custom"))
                 {
                     _customTab.Draw();
+                    ImGui.EndTabItem();
+                }
+
+                if (ImGui.BeginTabItem("Ignore"))
+                {
+                    _ignoreTab.Draw();
                     ImGui.EndTabItem();
                 }
 

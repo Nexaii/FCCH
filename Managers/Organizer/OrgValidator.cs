@@ -5,6 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using FCCH.Common;
 using FCCH.Models;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers.Organizer
 {
@@ -206,7 +207,7 @@ namespace FCCH.Managers.Organizer
                         }
                         catch (Exception ex)
                         {
-                            FCCHLog.Debug($"[OrgValidator] StackSize lookup failed for item {item->ItemId}, using 999: {ex.Message}");
+                            Log.Debug($"[OrgValidator] StackSize lookup failed for item {item->ItemId}, using 999: {ex.Message}");
                         }
 
                         items.Add(new ChestManager.ScannedSlot

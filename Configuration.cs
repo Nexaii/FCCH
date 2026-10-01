@@ -10,6 +10,8 @@ namespace FCCH
     [Serializable]
     public class Configuration : IPluginConfiguration
     {
+        public const int CurrentVersion = 2;
+
         public int Version { get; set; } = 0;
 
         public class IgnoredItem
@@ -47,8 +49,6 @@ namespace FCCH
 
         public int LastSeenWhatsNewRevision { get; set; } = 0;
 
-        public bool DebugMode { get; set; } = false;
-        public bool VerboseMode { get; set; } = false;
         public bool QuietMode { get; set; } = false;
         public bool CompactItemNames { get; set; } = true;
         public bool EnableItemContextMenuEntries { get; set; } = false;
@@ -67,7 +67,8 @@ namespace FCCH
         public bool ToolbarSnapToGrid { get; set; } = false;
         public List<ToolbarButtonConfig> ToolbarButtons { get; set; } = CreateDefaultToolbarButtons();
 
-        public string DebugLogPath { get; set; } = "";
+        public bool LogToFile { get; set; } = false;
+        public string LogFilePath { get; set; } = "";
 
         public bool LowerQualityOnDeposit { get; set; } = false;
         public bool PlayCompletionSound { get; set; } = false;
@@ -95,6 +96,14 @@ namespace FCCH
         public void Initialize(IDalamudPluginInterface pluginInterface)
         {
             this.PluginInterface = pluginInterface;
+        }
+
+        public bool Migrate()
+        {
+            if (Version >= CurrentVersion) return false;
+            Version = CurrentVersion;
+            LastSeenWhatsNewRevision = Common.Changelog.Revision;
+            return true;
         }
 
         public void Save()

@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FCCH.Models;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -53,16 +54,16 @@ namespace FCCH.Managers
                 if (Plugin.SigScanner.TryScanText(InvManagerMoveItemSig, out var ptr))
                 {
                     _invManagerMoveItem = Marshal.GetDelegateForFunctionPointer<InventoryManagerMoveItemDelegate>(ptr);
-                    FCCHLog.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
+                    Log.Info($"[MoveManager] InventoryManager_MoveItem resolved at 0x{ptr:X16}");
                 }
                 else
                 {
-                    FCCHLog.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
+                    Log.Warning("[MoveManager] InventoryManager_MoveItem signature mismatch.");
                 }
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
+                Log.Error(ex, "[MoveManager] Failed to resolve InventoryManager_MoveItem.");
             }
         }
 
@@ -103,9 +104,12 @@ namespace FCCH.Managers
                 return;
             }
 
-            CompletedCount++;
             var invManager = InventoryManager.Instance();
-            if (invManager == null) return;
+            if (invManager == null)
+            {
+                EmitBatchSummaryIfDrained();
+                return;
+            }
 
             var srcContainer = invManager->GetInventoryContainer(op.SrcInv);
             var dstContainer = invManager->GetInventoryContainer(op.DstInv);
@@ -113,21 +117,17 @@ namespace FCCH.Managers
             if (srcContainer == null)
             {
                 DebugLog($"[ExecuteMove] Source container {op.SrcInv} is null. Skipping.");
+                EmitBatchSummaryIfDrained();
                 return;
             }
             if (dstContainer == null && !(op.ItemId == 1 && op.IsNativeMove))
             {
                 DebugLog($"[ExecuteMove] Destination container {op.DstInv} is null. Skipping.");
+                EmitBatchSummaryIfDrained();
                 return;
             }
 
-#if DEBUG
-            if (_configuration.VerboseMode)
-                ChatHelper.Info($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot})");
-#endif
-            
-            if (_configuration.DebugMode)
-                DebugLog($"[Move] {op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) Native={op.IsNativeMove}");
+            DebugLog($"{op.Amount}x Item#{op.ItemId} ({op.SrcInv}:{op.SrcSlot} -> {op.DstInv}:{op.DstSlot}) Native={op.IsNativeMove}");
             
             if (_configuration.LowerQualityOnDeposit && IsFCPage(op.DstInv) && !IsFCPage(op.SrcInv))
             {
@@ -173,6 +173,8 @@ namespace FCCH.Managers
                     return;
                 }
 
+                CompletedCount++;
+
                 if (RefusalWatcher != null && RefusalWatcher.ConsumeRefusalSince(_lastDispatchUtc))
                 {
                     DebugLog($"[Move/Refused] LogMessage#{RefusalWatcher.LastRefusalLogId} on {guardTab}");
@@ -188,7 +190,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
+                Log.Error(ex, $"[Move] Transaction aborted for Item#{op.ItemId}");
                 DebugLog($"[Error] Move failed: {ex.Message}");
                 EmitBatchSummaryIfDrained();
             }
@@ -212,7 +214,7 @@ namespace FCCH.Managers
 
             if (op.IsNativeMove)
             {
-                FCCHLog.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
+                Log.Error($"[Move] Native delegate missing - refusing quantity move for Item#{op.ItemId}.");
                 return false;
             }
 
@@ -232,11 +234,7 @@ namespace FCCH.Managers
                    type == InventoryType.FreeCompanyCrystals;
         }
         
-        private void DebugLog(string msg)
-        {
-            if (!_configuration.DebugMode) return;
-            FCCHLog.Info(msg);
-        }
+        private void DebugLog(string msg) => Log.Debug(msg, "Move");
         
         public void Clear()
         {
@@ -269,7 +267,7 @@ namespace FCCH.Managers
         private void BlockTabAndPrune(InventoryType tab)
         {
             if (!_blockedTabs.Add(tab)) return;
-            ChatHelper.Warning($"Stopped using {TabLabel(tab)} after {RefusalThreshold} consecutive refusals (likely permission, full, or stack limit).");
+            Chat.Warn($"Stopped {TabLabel(tab)} after {RefusalThreshold} refusals (permission / full / stack cap).");
 
             int dropped = 0;
             var kept = new Queue<MoveOperation>();

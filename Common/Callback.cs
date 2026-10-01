@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using FCCH.Diagnostics;
 using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
 
 namespace FCCH.Common
@@ -23,11 +24,11 @@ namespace FCCH.Common
             {
                 var ptr = Plugin.SigScanner.ScanText(Sig);
                 FireCallback = Marshal.GetDelegateForFunctionPointer<AtkUnitBase_FireCallbackDelegate>(ptr);
-                FCCHLog.Info($"Initialized Callback module, FireCallback = 0x{ptr:X16}");
+                Log.Info($"Initialized Callback module, FireCallback = 0x{ptr:X16}");
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "Failed to initialize Callback module.");
+                Log.Error(ex, "Failed to initialize Callback module.");
             }
         }
 

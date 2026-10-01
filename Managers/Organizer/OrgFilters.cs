@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FCCH.Common;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers.Organizer
 {
@@ -68,7 +69,7 @@ namespace FCCH.Managers.Organizer
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[OrgFilters] Item category cache build failed; category filters degraded.");
+                Log.Error(ex, "[OrgFilters] Item category cache build failed; category filters degraded.");
             }
         }
 

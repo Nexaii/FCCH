@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using FCCH.Common;
 
 namespace FCCH.Managers
@@ -23,41 +22,27 @@ namespace FCCH.Managers
                 return;
 
             var failed = HasOverflow;
-            var text = new StringBuilder();
-
-            if (batch.HasValue)
-            {
-                var b = batch.Value;
-                text.Append(b.Succeeded == 0 ? "Nothing moved." : $"{b.Succeeded}/{b.Total} moved.");
-                if (b.Refused > 0) text.Append($" {b.Refused} refused.");
-                if (b.Blocked > 0) text.Append($" {b.Blocked} skipped (blocked tabs).");
-            }
-            else
-            {
-                text.Append("Nothing moved.");
-            }
-
-            AppendOverflow(text);
-            Send(text.ToString(), failed);
+            var b = batch.HasValue
+                ? ((int, int, int, int)?)(batch.Value.Succeeded, batch.Value.Total, batch.Value.Refused, batch.Value.Blocked)
+                : null;
+            Send(MoveSummary.Build(b, DrainBuckets()), failed);
         }
 
         public static void Idle(string emptyMessage)
         {
             if (!HasOverflow)
             {
-                ChatHelper.Info(emptyMessage);
+                Chat.Result(emptyMessage);
                 return;
             }
 
-            var text = new StringBuilder("Nothing moved.");
-            AppendOverflow(text);
-            Send(text.ToString(), true);
+            Send(MoveSummary.Build(null, DrainBuckets()), true);
         }
 
         private static void Send(string message, bool failed)
         {
-            if (failed) ChatHelper.Alert(message);
-            else ChatHelper.Info(message);
+            if (failed) Chat.Warn(message);
+            else Chat.Result(message);
         }
 
         private static void DiscardOverflow()
@@ -67,31 +52,26 @@ namespace FCCH.Managers
             OperationManager.LastDuplicateOverflow.Clear();
         }
 
-        private static void AppendOverflow(StringBuilder text)
+        private static List<MoveSummary.Bucket> DrainBuckets() => new()
         {
-            AppendList(text, "stacks full", OperationManager.LastDepositOverflow);
-            AppendList(text, "inventory full", OperationManager.LastWithdrawOverflow);
-            AppendList(text, "stacks full", OperationManager.LastDuplicateOverflow);
-        }
+            Drain("stacks full", OperationManager.LastDepositOverflow),
+            Drain("inventory full", OperationManager.LastWithdrawOverflow),
+            Drain("stacks full", OperationManager.LastDuplicateOverflow),
+        };
 
-        private static void AppendList(StringBuilder text, string reason, List<(uint ItemId, uint Remaining)> overflow)
+        private static MoveSummary.Bucket Drain(string reason, List<(uint ItemId, uint Remaining)> overflow)
         {
-            if (overflow.Count == 0) return;
+            if (overflow.Count == 0)
+                return new MoveSummary.Bucket(System.Array.Empty<string>(), reason);
 
             overflow.Sort((a, b) => b.Remaining.CompareTo(a.Remaining));
 
-            if (text.Length > 0) text.Append(' ');
-            text.Append(ItemNames.Get(overflow[0].ItemId));
+            var names = new List<string>(overflow.Count);
+            foreach (var entry in overflow)
+                names.Add(ItemNames.Get(entry.ItemId));
 
-            if (overflow.Count == 2)
-                text.Append($" and {ItemNames.Get(overflow[1].ItemId)}");
-            else if (overflow.Count == 3)
-                text.Append($", {ItemNames.Get(overflow[1].ItemId)} and {ItemNames.Get(overflow[2].ItemId)}");
-            else if (overflow.Count > 3)
-                text.Append($", {ItemNames.Get(overflow[1].ItemId)} and {overflow.Count - 2} more");
-
-            text.Append($" did not fit ({reason}).");
             overflow.Clear();
+            return new MoveSummary.Bucket(names, reason);
         }
     }
 }

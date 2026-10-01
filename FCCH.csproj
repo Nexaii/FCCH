@@ -2,8 +2,8 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Authors>Nexai</Authors>
-    <Version>2.5.1.0</Version>
-    <AssemblyVersion>2.5.1.0</AssemblyVersion>
+    <Version>2.6.0.0</Version>
+    <AssemblyVersion>2.6.0.0</AssemblyVersion>
     <Description>Free Company Chest Helper. Automate deposits, withdrawals, organization, crystals, workshop project pulls, and custom item lists.</Description>
     <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/Nexaii/FCCH</PackageProjectUrl>
@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <Content Include="Assets\Completion.mp3">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

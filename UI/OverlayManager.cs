@@ -454,7 +454,7 @@ namespace FCCH.UI
             var gate = _helper.CanStartUserAction();
             if (!gate.CanRun)
             {
-                ChatHelper.Warning(gate.Reason);
+                Chat.Warn(gate.Reason);
                 return;
             }
 
@@ -475,7 +475,7 @@ namespace FCCH.UI
             var gate = _helper.CanStartUserAction();
             if (!gate.CanRun)
             {
-                ChatHelper.Warning(gate.Reason);
+                Chat.Warn(gate.Reason);
                 return;
             }
 

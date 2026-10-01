@@ -4,6 +4,7 @@ using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -44,7 +45,7 @@ namespace FCCH.Managers
                 _chestManager.ClearPage(tab);
 
             if (restricted.Count > 0)
-                ChatHelper.Verbose($"Skipping indexing restricted sections: {FormatSections(restricted)}");
+                Log.Verbose($"Skipping indexing restricted sections: {FormatSections(restricted)}");
 
             _queue = new Queue<InventoryType>(tabs.Except(restricted));
 
@@ -104,7 +105,7 @@ namespace FCCH.Managers
                 var currentPage = _chestManager.GetCurrentFCPage(addon);
                 if (currentPage == _targetPage || (isPassive && _chestManager.IsInventoryLoaded(_targetPage)))
                 {
-                    if (_configuration.DebugMode) DumpContainerDiag(_targetPage);
+                    DumpContainerDiag(_targetPage);
                     _chestManager.UpdateChestState(_targetPage);
 
                     if (_queue.Count > 0)
@@ -116,13 +117,9 @@ namespace FCCH.Managers
                     else
                     {
                         _phase = IndexingPhase.Idle;
-                        ChatHelper.Verbose($"Indexed {_tabCount} tabs.");
+                        Log.Verbose($"Indexed {_tabCount} tabs.");
 
-                        if (_configuration.DebugMode)
-                        {
-                            FCCHLog.Info("Scanned Content:");
-                            FCCHLog.Info(_chestManager.GetDebugContent());
-                        }
+                        Log.Verbose(_chestManager.GetDebugContent(), "Indexer");
 
                         OnIndexingComplete?.Invoke();
                         if (_autoDumpAfterIndexing) OnAutoDumpRequested?.Invoke();
@@ -130,7 +127,7 @@ namespace FCCH.Managers
                 }
                 else if (Environment.TickCount64 - _lastActionMs > _configuration.IndexingTimeoutSeconds * 1000L)
                 {
-                    ChatHelper.Error("Indexing synchronization timed out. Please try again.");
+                    Chat.Error("Indexing timed out, try again.");
                     _phase = IndexingPhase.Idle;
                 }
             }
@@ -153,7 +150,7 @@ namespace FCCH.Managers
             var container = InventoryManager.Instance()->GetInventoryContainer(type);
             if (container == null)
             {
-                FCCHLog.Info($"[Diag] {type} container=NULL");
+                Log.Debug($"{type} container=NULL", "Indexer");
                 return;
             }
             int nonEmpty = 0;
@@ -167,7 +164,7 @@ namespace FCCH.Managers
                     nonEmpty++;
                 }
             }
-            FCCHLog.Info($"[Diag] {type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}");
+            Log.Debug($"{type} ptr=0x{(nint)container:X} size={container->Size} loaded={container->IsLoaded} nonEmpty={nonEmpty} firstId={firstId}", "Indexer");
         }
     }
 }

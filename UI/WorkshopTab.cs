@@ -13,6 +13,7 @@ using FCCH.GameData;
 using FCCH.IPC;
 using FCCH.Models;
 using FCCH.Managers;
+using FCCH.Common;
 
 namespace FCCH.UI
 {
@@ -212,9 +213,9 @@ namespace FCCH.UI
                                 success++;
                         }
                         if (success > 0)
-                            Common.ChatHelper.Info($"Queued {success} projects to Workshoppa.");
+                            Chat.Result($"Queued {success} projects to Workshoppa.");
                         else
-                            Common.ChatHelper.Warning("Failed to queue - is Workshoppa busy?");
+                            Chat.Warn("Couldn't queue, is Workshoppa busy?");
                     }
                     ImGui.PopStyleColor();
                     if (!hasProjects) ImGui.EndDisabled();
@@ -225,9 +226,9 @@ namespace FCCH.UI
                     if (ImGui.Button("WS Clear", new Vector2(-1, 0)))
                     {
                         if (_workshoppaIPC.ClearQueue())
-                            Common.ChatHelper.Info("Workshoppa queue cleared.");
+                            Chat.Result("Workshoppa queue cleared.");
                         else
-                            Common.ChatHelper.Warning("Failed to clear - is Workshoppa busy?");
+                            Chat.Warn("Couldn't clear, is Workshoppa busy?");
                     }
                     ImGui.PopStyleColor();
                     if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Clear Workshoppa's queue");
@@ -556,11 +557,11 @@ namespace FCCH.UI
 
                 if (Common.ExportHelper.Export(Common.ExportHelper.WorkshopListPrefix, exportData))
                 {
-                    Common.ChatHelper.Info($"Exported {exportData.Count} workshop projects to clipboard.");
+                    Chat.Result($"Copied {exportData.Count} workshop projects to clipboard.");
                 }
                 else
                 {
-                    Common.ChatHelper.Warning("Failed to export workshop projects.");
+                    Chat.Warn("Failed to export Workshop projects.");
                 }
             }
             ImGui.PopStyleColor();
@@ -583,11 +584,11 @@ namespace FCCH.UI
                             _helper.ShoppingList.Add(new ShoppingItem { Craft = craft, Quantity = item.Quantity });
                         }
                     }
-                    Common.ChatHelper.Info($"Imported {data.Count} workshop projects.");
+                    Chat.Result($"Imported {data.Count} workshop projects.");
                 }
                 else
                 {
-                    Common.ChatHelper.Warning(Common.ExportHelper.GetErrorMessage(result, "Workshop"));
+                    Chat.Warn(Common.ExportHelper.GetErrorMessage(result, "Workshop"));
                 }
             }
             ImGui.PopStyleColor();

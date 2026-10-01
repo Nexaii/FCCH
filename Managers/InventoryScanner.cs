@@ -5,13 +5,13 @@ using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
     public unsafe class InventoryScanner : IDisposable
     {
         private readonly HashSet<InventoryType> _loadedInventories = new();
-        private readonly Configuration _configuration;
 
         private delegate void FcBitsetSetterDelegate(nint state, uint byteIndex, byte newByte);
 
@@ -32,9 +32,8 @@ namespace FCCH.Managers
             InventoryType.FreeCompanyCrystals,
         };
 
-        public InventoryScanner(Configuration configuration)
+        public InventoryScanner()
         {
-            _configuration = configuration;
             Plugin.GameInteropProvider.InitializeFromAttributes(this);
 
             if (_fcBitsetHook != null)
@@ -44,7 +43,7 @@ namespace FCCH.Managers
             }
             else
             {
-                FCCHLog.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
+                Log.Warning("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
                 DebugLog("[InventoryScanner] FC bitset setter signature mismatch - hook not resolved.");
             }
         }
@@ -74,7 +73,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                FCCHLog.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
+                Log.Error(e, "[InventoryScanner] Failed to read old FC bitset byte.");
             }
 
             _fcBitsetHook!.Original(state, byteIndex, newByte);
@@ -107,7 +106,7 @@ namespace FCCH.Managers
             }
             catch (Exception e)
             {
-                FCCHLog.Error(e, "[InventoryScanner] FC bitset processing failed.");
+                Log.Error(e, "[InventoryScanner] FC bitset processing failed.");
             }
         }
 
@@ -163,10 +162,6 @@ namespace FCCH.Managers
             return InventoryManager.Instance()->GetInventoryContainer(type);
         }
 
-        private void DebugLog(string msg)
-        {
-            if (!_configuration.DebugMode) return;
-            FCCHLog.Info(msg);
-        }
+        private void DebugLog(string msg) => Log.Debug(msg, "Scanner");
     }
 }

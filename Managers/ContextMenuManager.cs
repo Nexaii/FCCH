@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -70,7 +71,7 @@ namespace FCCH.Managers
                 var destTab = ResolveDepositTab();
                 if (destTab == InventoryType.Invalid)
                 {
-                    ChatHelper.Info("Fast Move: open a chest tab or hold a number key 1-5 to pick the deposit tab.");
+                    Chat.Result("Fast Move: open a tab, or hold 1-5 to pick the tab.");
                     return true;
                 }
 
@@ -155,8 +156,7 @@ namespace FCCH.Managers
             if (source == null || source->ItemId == 0)
                 return false;
 
-            if (configuration.DebugMode)
-                FCCHLog.Info($"[FastMove] player crystal hover itemId={source->ItemId} container={agent->TargetInventoryId}");
+            Log.Debug($"player crystal hover itemId={source->ItemId} container={agent->TargetInventoryId}", "FastMove");
 
             itemId = source->ItemId;
             return true;
@@ -177,8 +177,7 @@ namespace FCCH.Managers
                 return false;
 
             var slot = chestHelper.GetChestSlot(InventoryType.FreeCompanyCrystals, (int)detail->Index);
-            if (configuration.DebugMode)
-                FCCHLog.Info($"[FastMove] chest crystal hover detailItemId={detail->ItemId} detailIndex={detail->Index} slotItemId={slot?.ItemId ?? 0}");
+            Log.Debug($"chest crystal hover detailItemId={detail->ItemId} detailIndex={detail->Index} slotItemId={slot?.ItemId ?? 0}", "FastMove");
 
             if (slot == null || slot.Value.ItemId == 0 || slot.Value.ItemId != detail->ItemId)
                 return false;
@@ -306,7 +305,7 @@ namespace FCCH.Managers
 
             SortCustomList();
             configuration.Save();
-            ChatHelper.Info($"Added {item.Name} to Custom list.");
+            Chat.Result($"Added {item.Name} to Custom.");
         }
 
         private void AddToIgnoreList(Item item)
@@ -324,7 +323,7 @@ namespace FCCH.Managers
 
             SortIgnoreList();
             configuration.Save();
-            ChatHelper.Info($"Added {item.Name} to Ignore list.");
+            Chat.Result($"Added {item.Name} to Ignore.");
         }
 
         private void RemoveFromCustomList(Item item)
@@ -334,7 +333,7 @@ namespace FCCH.Managers
                 return;
 
             configuration.Save();
-            ChatHelper.Info($"Removed {item.Name} from Custom list.");
+            Chat.Result($"Removed {item.Name} from Custom.");
         }
 
         private void RemoveFromIgnoreList(Item item)
@@ -344,7 +343,7 @@ namespace FCCH.Managers
                 return;
 
             configuration.Save();
-            ChatHelper.Info($"Removed {item.Name} from Ignore list.");
+            Chat.Result($"Removed {item.Name} from Ignore.");
         }
 
         private void SortCustomList()

@@ -4,6 +4,7 @@ using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.Common
 {
@@ -59,19 +60,19 @@ namespace FCCH.Common
 
                 if (!_initialized)
                 {
-                    FCCHLog.Warning("[RefusalWatch] Not initialized. hooks="
+                    Log.Warning("[RefusalWatch] Not initialized. hooks="
                         + (_hookShow != null ? "S" : "-")
                         + (_hookShowUInt != null ? "U" : "-")
                         + (_hookShowString != null ? "T" : "-"));
                 }
                 else
                 {
-                    FCCHLog.Info($"[RefusalWatch] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals ({PinnedRefusalLogMessageIds.Count} pinned).");
+                    Log.Info($"[RefusalWatch] Watching {_refusalLogIds.Count} LogMessage IDs for inventory refusals ({PinnedRefusalLogMessageIds.Count} pinned).");
                 }
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[RefusalWatch] Initialization failed.");
+                Log.Error(ex, "[RefusalWatch] Initialization failed.");
             }
         }
 
@@ -106,7 +107,7 @@ namespace FCCH.Common
                     if (!LooksLikeRefusal(text)) break;
 
                     _refusalLogIds.Add(row.RowId);
-                    FCCHLog.Warning($"[RefusalWatch] Unpinned refusal LogMessage#{row.RowId}: \"{text}\" (add to pinned set)");
+                    Log.Warning($"[RefusalWatch] Unpinned refusal LogMessage#{row.RowId}: \"{text}\" (add to pinned set)");
                     break;
                 }
             }
@@ -121,7 +122,7 @@ namespace FCCH.Common
         private void InstallHooks()
         {
             var module = RaptureLogModule.Instance();
-            if (module == null) { FCCHLog.Warning("[RefusalWatch] RaptureLogModule.Instance() null."); return; }
+            if (module == null) { Log.Warning("[RefusalWatch] RaptureLogModule.Instance() null."); return; }
 
             try
             {
@@ -129,7 +130,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessage, OnShowLogMessage);
                 _hookShow?.Enable();
             }
-            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessage failed."); }
+            catch (Exception ex) { Log.Error(ex, "[RefusalWatch] Hook ShowLogMessage failed."); }
 
             try
             {
@@ -137,7 +138,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageUInt, OnShowLogMessageUInt);
                 _hookShowUInt?.Enable();
             }
-            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageUInt failed."); }
+            catch (Exception ex) { Log.Error(ex, "[RefusalWatch] Hook ShowLogMessageUInt failed."); }
 
             try
             {
@@ -145,7 +146,7 @@ namespace FCCH.Common
                     (nint)RaptureLogModule.MemberFunctionPointers.ShowLogMessageString, OnShowLogMessageString);
                 _hookShowString?.Enable();
             }
-            catch (Exception ex) { FCCHLog.Error(ex, "[RefusalWatch] Hook ShowLogMessageString failed."); }
+            catch (Exception ex) { Log.Error(ex, "[RefusalWatch] Hook ShowLogMessageString failed."); }
         }
 
         private void OnShowLogMessage(RaptureLogModule* thisPtr, uint logMessageId)

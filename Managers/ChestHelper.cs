@@ -15,6 +15,7 @@ using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -88,7 +89,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[FCCH] Failed to start RefusalWatch.");
+                Log.Error(ex, "[FCCH] Failed to start RefusalWatch.");
             }
         }
 
@@ -178,7 +179,9 @@ namespace FCCH.Managers
 
                  ChestManager.ScanFCChest();
                  
-                 MoveReport.Completed(MoveManager.TakeLastBatch());
+                 var batch = MoveManager.TakeLastBatch();
+                 if (Gil == null || !Gil.TryCompleteWithdraw())
+                     MoveReport.Completed(batch);
 
                 if (!MoveManager.SuppressCompletionSound)
                     SoundHelper.PlayCompletionSound(_configuration);
@@ -224,7 +227,7 @@ namespace FCCH.Managers
             _indexingCompleteMs = 0;
             _wasMoving = false;
             CompanyChestClosedDuringOperation?.Invoke();
-            ChatHelper.Warning("FCCH stopped because the company chest was closed.");
+            Chat.Warn("Stopped · FC chest closed.");
             DebugLog("[Safety] Aborted active FCCH work because the company chest closed.");
         }
 
@@ -233,7 +236,7 @@ namespace FCCH.Managers
             var gate = CanAcceptCommand();
             if (!gate.CanRun)
             {
-                ChatHelper.Warning(gate.Reason);
+                Chat.Warn(gate.Reason);
                 return;
             }
 
@@ -282,7 +285,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCHLog.Debug($"[ChestHelper] Availability check threw, treating as unavailable: {ex.Message}");
+                Log.Debug($"[ChestHelper] Availability check threw, treating as unavailable: {ex.Message}");
                 return true;
             }
         }
@@ -295,7 +298,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCHLog.Debug($"[ChestHelper] Chest addon visibility check threw: {ex.Message}");
+                Log.Debug($"[ChestHelper] Chest addon visibility check threw: {ex.Message}");
                 return false;
             }
         }
@@ -312,7 +315,7 @@ namespace FCCH.Managers
             var gate = CanStartUserAction();
             if (!gate.CanRun)
             {
-                ChatHelper.Warning(gate.Reason);
+                Chat.Warn(gate.Reason);
                 return false;
             }
 
@@ -327,7 +330,7 @@ namespace FCCH.Managers
             _pendingCommand = null;
             _isWaitingForIndex = false;
             _pendingCommandQueuedAtUtc = DateTime.MinValue;
-            ChatHelper.Error(userMessage);
+            Chat.Error(userMessage);
             DebugLog($"[PendingCommand] cancelled: {userMessage}");
         }
 
@@ -338,7 +341,7 @@ namespace FCCH.Managers
                 var chest = Plugin.ObjectTable.FirstOrDefault(x => x.Name.ToString().Equals("Company Chest", StringComparison.OrdinalIgnoreCase));
                 if (chest != null)
                 {
-                    FCCHLog.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
+                    Log.Info($"[FCCH] Interacting with Company Chest (Oid: {chest.BaseId:X}).");
                     
                     var targetSystem = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
                     if (targetSystem != null)
@@ -348,7 +351,7 @@ namespace FCCH.Managers
                 }
                 else
                 {
-                    ChatHelper.Error("Could not find 'Company Chest' nearby.");
+                    Chat.Error("Could not find 'Company Chest' nearby.");
                     _pendingCommand = null;
                     _isWaitingForIndex = false;
                     _pendingCommandQueuedAtUtc = DateTime.MinValue;
@@ -356,7 +359,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                 FCCHLog.Error(ex, "Failed to interact with chest.");
+                 Log.Error(ex, "Failed to interact with chest.");
                  _pendingCommand = null;
                  _isWaitingForIndex = false;
                  _pendingCommandQueuedAtUtc = DateTime.MinValue;
@@ -373,7 +376,7 @@ namespace FCCH.Managers
             var list = BuildWorkshopMaterialList();
             if (list.Count == 0)
             {
-                ChatHelper.Info("Workshop list is empty.");
+                Chat.Result("Workshop list is empty.");
                 return;
             }
 
@@ -475,12 +478,7 @@ namespace FCCH.Managers
         public void DumpRawPermissions(byte? overrideRank = null) => ChestManager.DumpRawPermissions(overrideRank);
         public string DumpAccessProbe() => ChestManager.DumpAccessProbe();
         
-        public void DebugLog(string msg)
-        {
-            if (!_configuration.DebugMode) return;
-            FCCHLog.Info(msg);
-            ChatHelper.Debug(msg);
-        }
+        public void DebugLog(string msg) => Log.Debug(msg, "Chest");
 
         public void Dispose()
         {
@@ -500,7 +498,7 @@ namespace FCCH.Managers
 
             if (_indexer.IsIdle)
             {
-                FCCHLog.Info("[FCCH] Chest opened. Starting full scan...");
+                Log.Info("[FCCH] Chest opened. Starting full scan...");
 
                 ChestManager.ResetIndexingSession();
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.Common
 {
@@ -67,10 +68,10 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[CategoryResolver] Category map build failed; category add is unavailable.");
+                Log.Error(ex, "[CategoryResolver] Category map build failed; category add is unavailable.");
             }
 
-            FCCHLog.Info($"[CategoryResolver] Built {_categories.Count} addable categories.");
+            Log.Info($"[CategoryResolver] Built {_categories.Count} addable categories.");
         }
 
         public static void Match(string search, List<CategoryMatch> results)

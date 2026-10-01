@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using FCCH.Diagnostics;
 
 namespace FCCH.Common
 {
@@ -83,14 +84,15 @@ namespace FCCH.Common
 
             if (line == null) return;
 
-            try { FCCHLog.Verbose(line); } catch { }
+            Log.Verbose(line, "Perf");
         }
+
+        public static bool Enabled { get; set; }
 
         private static bool IsEnabled()
         {
 #if DEBUG
-            try { return Plugin.Configuration?.DebugMode == true; }
-            catch { return false; }
+            return Enabled;
 #else
             return false;
 #endif

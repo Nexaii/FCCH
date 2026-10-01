@@ -3,7 +3,9 @@ using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Game;
+using System.IO;
 using FCCH.Common;
+using FCCH.Diagnostics;
 using FCCH.IPC;
 using FCCH.Managers;
 using FCCH.UI;
@@ -36,6 +38,7 @@ namespace FCCH
         private OverlayManager OverlayManager { get; init; }
         private SearchBarManager SearchBarManager { get; init; }
         private SettingsWindow SettingsWindow { get; init; }
+        private InfoWindow InfoWindow { get; init; }
         private WorkshopCache WorkshopCache { get; init; }
         private Dalamud.Interface.Windowing.WindowSystem WindowSystem { get; init; }
         private OpLockManager OpLockManager { get; init; }
@@ -44,7 +47,6 @@ namespace FCCH
         private ContextMenuManager ItemContextMenu { get; init; }
         private WorkshoppaIPC WorkshoppaIPC { get; init; }
         private IPCProvider IPC { get; init; }
-        private WhatsNewWindow WhatsNewWindow { get; init; }
 
         public static Configuration Configuration { get; private set; } = null!;
         private const string CommandHelpMessage = "Opens settings.\n- Deposit: da (All) | da1-da5 (Tabs) | ds (Custom) | dd (Dupes) | dc (Crystals)\n- Withdraw: wa (All) | wa1-wa5 (Tabs) | ws (Custom) | wp (Workshop) | wc (Crystals)\n- Gil: gd (Deposit) | gw (Withdraw) - e.g. 5k, 1m, 50%, all";
@@ -52,35 +54,33 @@ namespace FCCH
         public Plugin()
         {
             var savedConfig = PluginInterface.GetPluginConfig() as Configuration;
-            bool isFreshInstall = savedConfig == null;
             Configuration = savedConfig ?? new Configuration();
             Configuration.Initialize(PluginInterface);
+            if (Configuration.Migrate()) Configuration.Save();
+            Log.Init(
+                "FCCH",
+                PluginLog,
+                () => Configuration.LogToFile,
+                () => Configuration.LogFilePath,
+                Path.Combine(PluginInterface.ConfigDirectory.FullName, "FCCH.log"));
+            FCCH.Common.Chat.Init("FCCH", Chat, () => Configuration.QuietMode);
             if (Configuration.GilMode == GilDepositMode.Disabled)
             {
                 Configuration.GilMode = GilDepositMode.Percentage;
                 Configuration.Save();
             }
-#if !DEBUG
-            if (Configuration.DebugMode || Configuration.VerboseMode)
-            {
-                Configuration.DebugMode = false;
-                Configuration.VerboseMode = false;
-                Configuration.Save();
-            }
-#endif
-
             var ineligible = ItemListEligibility.RemoveIneligible(Configuration);
             if (ineligible.Count > 0)
             {
                 Configuration.Save();
-                FCCHLog.Info($"Removed {ineligible.Count} entries that cannot be stored in an FC chest: {string.Join(", ", ineligible)}");
+                Log.Info($"Removed {ineligible.Count} entries that cannot be stored in an FC chest: {string.Join(", ", ineligible)}");
             }
 
             WorkshopCache = new WorkshopCache(Data, PluginLog);
             ChestHelper = new ChestHelper(Configuration);
             WorkshoppaIPC = new WorkshoppaIPC(PluginInterface);
 
-            OpLockManager = new OpLockManager(Configuration);
+            OpLockManager = new OpLockManager();
             GilManager = new GilManager(Configuration, ChestHelper.ChestManager, ChestHelper.MoveManager);
             ChestHelper.Gil = GilManager;
             IPC = new IPCProvider(PluginInterface, ChestHelper, GilManager);
@@ -97,12 +97,11 @@ namespace FCCH
             OverlayManager = new OverlayManager(ChestHelper, GameGui, Configuration, WindowSystem, OrgService);
             SearchBarManager = new SearchBarManager(ChestHelper, GameGui, KeyState, Configuration, WindowSystem);
 
-            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIPC);
-            WhatsNewWindow = new WhatsNewWindow();
-            WhatsNewWindow.OpenSettings = () => ChestHelper.IsSettingsVisible = true;
+            InfoWindow = new InfoWindow();
+            SettingsWindow = new SettingsWindow(ChestHelper, WorkshopCache, GameGui, Configuration, OrgService, WorkshoppaIPC, InfoWindow);
 
+            WindowSystem.AddWindow(InfoWindow);
             WindowSystem.AddWindow(SettingsWindow);
-            WindowSystem.AddWindow(WhatsNewWindow);
             
             CommandManager.AddHandler("/fcch", new CommandInfo(OnCommand)
             {
@@ -115,23 +114,16 @@ namespace FCCH
             
             Framework.Update += OnUpdate;
 
-            ShowWhatsNewIfUnseen(isFreshInstall);
+            ShowChangelogIfRevisionUnseen();
         }
 
-        private void ShowWhatsNewIfUnseen(bool isFreshInstall)
+        private void ShowChangelogIfRevisionUnseen()
         {
-            if (isFreshInstall)
-            {
-                Configuration.LastSeenWhatsNewRevision = Common.WhatsNew.Revision;
-                Configuration.Save();
-                return;
-            }
+            if (Common.Changelog.Revision <= Configuration.LastSeenWhatsNewRevision) return;
 
-            if (Common.WhatsNew.Revision <= Configuration.LastSeenWhatsNewRevision) return;
-
-            Configuration.LastSeenWhatsNewRevision = Common.WhatsNew.Revision;
+            Configuration.LastSeenWhatsNewRevision = Common.Changelog.Revision;
             Configuration.Save();
-            WhatsNewWindow.IsOpen = true;
+            InfoWindow.OpenTo(InfoTab.Changelog);
         }
 
         private bool _wasSettingsOpen = false;
@@ -145,7 +137,7 @@ namespace FCCH
 
         private unsafe void OnUpdate(IFramework framework)
         {
-            Common.DebugFileLogger.Tick();
+            Log.Tick();
             OrgService.UpdateSortWatch();
             OrgService.UpdateMergeWatch();
             OverlayManager.Update();
@@ -224,7 +216,7 @@ namespace FCCH
                     ChestHelper.ProcessCommand(() => ChestHelper.WithdrawWorkshopItems());
                     break;
                 case "help":
-                    ChatHelper.Reply(CommandHelpMessage);
+                    FCCH.Common.Chat.Reply(CommandHelpMessage);
                     break;
 
 #if DEBUG
@@ -236,7 +228,7 @@ namespace FCCH
                         
                         var tabString = string.Join(", ", System.Linq.Enumerable.Select(tabs, 
                             t => t.ToString().Replace("FreeCompanyPage", "")));
-                        ChatHelper.Reply($"FC Rank: {rank}. Available Tabs: {tabString}");
+                        FCCH.Common.Chat.Reply($"FC Rank: {rank}. Available Tabs: {tabString}");
 
                         var sb = new System.Text.StringBuilder();
                         sb.Append($"Permissions: ");
@@ -250,8 +242,8 @@ namespace FCCH
                         
                         if (sb.Length > 3) sb.Length -= 3;
                         
-                        ChatHelper.Reply(sb.ToString());
-                        ChatHelper.Reply($"Gil: {GilManager.GetPermissionString()}");
+                        FCCH.Common.Chat.Reply(sb.ToString());
+                        FCCH.Common.Chat.Reply($"Gil: {GilManager.GetPermissionString()}");
                     });
                     break;
 #endif
@@ -274,24 +266,23 @@ namespace FCCH
                         byte? overrideRank = null;
                         if (parts.Length > 1 && byte.TryParse(parts[1], out var r)) overrideRank = r;
                         ChestHelper.DumpRawPermissions(overrideRank);
-                        ChatHelper.Reply("FC permission dump written to log (/xllog).");
+                        FCCH.Common.Chat.Reply("FC permission dump written to log (/xllog).");
                     });
                     break;
                 case "accessprobe":
                 case "aprobe":
-                    ChatHelper.Reply(ChestHelper.DumpAccessProbe());
+                    FCCH.Common.Chat.Reply(ChestHelper.DumpAccessProbe());
                     break;
                 case "debug":
-                    Configuration.DebugMode = !Configuration.DebugMode;
-                    Configuration.Save();
-                    ChatHelper.Reply($"Debug Mode: {(Configuration.DebugMode ? "ON" : "OFF")}");
+                    Common.PerfCounter.Enabled = !Common.PerfCounter.Enabled;
+                    FCCH.Common.Chat.Reply($"Perf counters: {(Common.PerfCounter.Enabled ? "ON" : "OFF")}");
                     break;
                 case "whatsnew":
-                    WhatsNewWindow.IsOpen = true;
+                    InfoWindow.OpenTo(InfoTab.Changelog);
                     break;
 #endif
                 default:
-                    ChatHelper.Reply($"Unknown FCCH command: {subCommand}. Use /fcch help.");
+                    FCCH.Common.Chat.Reply($"Unknown command: {subCommand}. Try /fcch help.");
                     break;
             }
         }
@@ -336,7 +327,7 @@ namespace FCCH
             ChestHelper?.Dispose();
 
             WindowSystem?.RemoveAllWindows();
-            Common.DebugFileLogger.DrainAndShutdown();
+            Log.Shutdown();
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -45,7 +46,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} items for deposit.");
             else MoveReport.Idle("No items to deposit.");
         }
 
@@ -86,7 +87,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} items for withdrawal.");
             else MoveReport.Idle("No items to withdraw.");
         }
 
@@ -98,7 +99,7 @@ namespace FCCH.Managers
                 .ToList();
 
             if (skipped.Count > 0)
-                ChatHelper.Verbose($"Skipping {command} for tabs: {FormatTabs(skipped)}");
+                Log.Verbose($"Skipping {command} for tabs: {FormatTabs(skipped)}");
         }
 
         private static bool CanDeposit(byte access)
@@ -140,12 +141,12 @@ namespace FCCH.Managers
 
         public void DepositToTab(int tab)
         {
-            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
+            if (tab < 1 || tab > 5) { Chat.Warn("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
             if (!TryGuardTab(target, false, out var guardError))
             {
-                ChatHelper.Warning(guardError);
+                Chat.Warn(guardError);
                 return;
             }
 
@@ -159,7 +160,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for deposit to Tab {tab}.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} items for deposit to Tab {tab}.");
             else MoveReport.Idle($"No items to deposit to Tab {tab}.");
         }
 
@@ -169,7 +170,7 @@ namespace FCCH.Managers
 
             if (!TryGuardTab(destTab, false, out var guardError))
             {
-                ChatHelper.Warning(guardError);
+                Chat.Warn(guardError);
                 return;
             }
 
@@ -194,7 +195,7 @@ namespace FCCH.Managers
             int tab = ((int)srcPage - (int)InventoryType.FreeCompanyPage1) + 1;
             if (_chestManager.GetChestAccess(srcPage) != Constants.FCPermissions.FullAccess)
             {
-                ChatHelper.Warning($"Tab {tab}: no withdraw permission.");
+                Chat.Warn($"Tab {tab}: no withdraw access.");
                 return;
             }
 
@@ -231,18 +232,18 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} duplicates for deposit.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} duplicates for deposit.");
             else MoveReport.Idle("No duplicates to deposit.");
         }
 
         public void WithdrawFromTab(int tab)
         {
-            if (tab < 1 || tab > 5) { ChatHelper.Warning("Tab must be 1-5."); return; }
+            if (tab < 1 || tab > 5) { Chat.Warn("Tab must be 1-5."); return; }
 
             var target = (InventoryType)((int)InventoryType.FreeCompanyPage1 + (tab - 1));
             if (!TryGuardTab(target, true, out var guardError))
             {
-                ChatHelper.Warning(guardError);
+                Chat.Warn(guardError);
                 return;
             }
 
@@ -270,7 +271,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for withdrawal from Tab {tab}.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} items for withdrawal from Tab {tab}.");
             else MoveReport.Idle($"No items to withdraw from Tab {tab}.");
         }
 
@@ -286,7 +287,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} items for workshop withdrawal.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} items for workshop withdrawal.");
             else MoveReport.Idle("No materials found to withdraw.");
         }
 
@@ -297,7 +298,7 @@ namespace FCCH.Managers
 
             if (items.Count == 0)
             {
-                ChatHelper.Info("Deposit request is empty.");
+                Chat.Result("Nothing to deposit.");
                 return;
             }
 
@@ -308,7 +309,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} requested items for deposit.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} requested items for deposit.");
             else MoveReport.Idle("No requested items to deposit.");
         }
 
@@ -320,7 +321,7 @@ namespace FCCH.Managers
             var items = BuildCustomItemAmounts(x => x.CanDeposit, true);
             if (items.Count == 0)
             {
-                ChatHelper.Info("Custom deposit list is empty.");
+                Chat.Result("Custom deposit list is empty.");
                 return;
             }
 
@@ -331,7 +332,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for deposit.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} custom items for deposit.");
             else MoveReport.Idle("No custom items to deposit.");
         }
 
@@ -343,7 +344,7 @@ namespace FCCH.Managers
             var items = BuildCustomItemAmounts(x => x.CanWithdraw, false);
             if (items.Count == 0)
             {
-                ChatHelper.Info("Custom withdrawal list is empty.");
+                Chat.Result("Custom withdrawal list is empty.");
                 return;
             }
 
@@ -354,7 +355,7 @@ namespace FCCH.Managers
                 _moveManager.Enqueue(move);
             }
 
-            if (moves.Count > 0) ChatHelper.Verbose($"Queued {moves.Count} custom items for withdrawal.");
+            if (moves.Count > 0) Log.Verbose($"Queued {moves.Count} custom items for withdrawal.");
             else MoveReport.Idle("No custom items to withdraw.");
         }
 
@@ -402,7 +403,7 @@ namespace FCCH.Managers
         {
             _moveManager.Clear();
             _indexer.Stop();
-            ChatHelper.Info("Stopped.");
+            Chat.Result("Stopped.");
         }
 
         public void SwitchToTab(InventoryType type)

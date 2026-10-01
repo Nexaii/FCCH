@@ -6,6 +6,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
 using FCCH.Common;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.UI
 {
@@ -106,10 +107,10 @@ namespace FCCH.UI
             }
             catch (Exception ex)
             {
-                FCCHLog.Debug($"[ItemNameFormatter] Materia name table failed: {ex.Message}");
+                Log.Debug($"[ItemNameFormatter] Materia name table failed: {ex.Message}");
             }
 
-            FCCHLog.Info($"[ItemNameFormatter] Materia name table built with {names.Count} entries.");
+            Log.Info($"[ItemNameFormatter] Materia name table built with {names.Count} entries.");
             return names;
         }
 
@@ -349,7 +350,7 @@ namespace FCCH.UI
                 }
                 catch (Exception ex)
                 {
-                    FCCHLog.Error(ex, "[ItemNameFormatter] Family rule rebuild failed.");
+                    Log.Error(ex, "[ItemNameFormatter] Family rule rebuild failed.");
                 }
 
                 _familyRules = nextRules;

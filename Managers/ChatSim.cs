@@ -12,11 +12,11 @@ namespace FCCH.Managers
         {
             if (moveManager.IsProcessing)
             {
-                ChatHelper.Warning("simchat: a move is running. Wait for it to finish.");
+                Chat.Warn("simchat: a move is running. Wait for it to finish.");
                 return;
             }
 
-            ChatHelper.Reply("simchat: expect 11 lines below. A 12th means suppression is broken.");
+            Chat.Result("simchat: expect 11 lines below. A 12th means suppression is broken.");
 
             Batch(14, 14, 0, 0);
             Batch(12, 14, 2, 0);

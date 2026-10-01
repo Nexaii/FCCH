@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers.Organizer
 {
@@ -57,7 +58,7 @@ namespace FCCH.Managers.Organizer
             _onTabsRefreshRequested = onTabsRefreshRequested;
             _onViewTabRequested = onViewTabRequested;
             _validator = new OrgValidator(chestManager, config);
-            _executor = new OrgExecutor(chestManager, moveManager, config);
+            _executor = new OrgExecutor(chestManager, moveManager);
             _executor.OnJobCompleted += HandleJobCompleted;
         }
 
@@ -108,7 +109,7 @@ namespace FCCH.Managers.Organizer
         {
             if (!CanSortTab(tab))
             {
-                ChatHelper.Warning(IsItemPage(tab) ? "No modify access on that tab." : "Sort is only for item tabs.");
+                Chat.Warn(IsItemPage(tab) ? "No modify access on that tab." : "Sort is only for item tabs.");
                 return false;
             }
 
@@ -117,13 +118,13 @@ namespace FCCH.Managers.Organizer
             var moves = SortPlanner.Plan(tab, TabSlots(tab), order, descending, filters);
             if (moves.Count == 0)
             {
-                ChatHelper.Info("Tab is already sorted.");
+                Chat.Result("Tab already sorted.");
                 return false;
             }
 
             if (moves.Count > SortPlanner.MoveCap)
             {
-                ChatHelper.Warning($"Sort needs {moves.Count} moves, over the {SortPlanner.MoveCap} cap. Aborting.");
+                Chat.Warn($"Aborted · Sort needs {moves.Count} moves (cap {SortPlanner.MoveCap}).");
                 return false;
             }
 
@@ -144,7 +145,7 @@ namespace FCCH.Managers.Organizer
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
 
-            ChatHelper.Verbose($"Queued {moves.Count} sort moves.");
+            Log.Verbose($"Queued {moves.Count} sort moves.");
             return true;
         }
 
@@ -171,7 +172,7 @@ namespace FCCH.Managers.Organizer
 
             if (_sortPass >= SortMaxPasses)
             {
-                ChatHelper.Warning("Could not fully sort the tab (likely chest contention or permissions).");
+                Chat.Warn("Couldn't fully sort (contention or permissions).");
                 FinishSort(success: false);
                 return;
             }
@@ -199,7 +200,7 @@ namespace FCCH.Managers.Organizer
 
             if (success)
             {
-                ChatHelper.Info($"Sorted {GetTabDisplayName(_sortTab)} ({_sortMoveTotal} moves).");
+                Chat.Result($"Sorted {GetTabDisplayName(_sortTab)} · {_sortMoveTotal} moves.");
                 Common.SoundHelper.PlayCompletionSound(_config);
                 _onTabsRefreshRequested(new[] { _sortTab });
             }
@@ -209,7 +210,7 @@ namespace FCCH.Managers.Organizer
         {
             if (!CanSortTab(tab))
             {
-                ChatHelper.Warning(IsItemPage(tab) ? "No modify access on that tab." : "Merge is only for item tabs.");
+                Chat.Warn(IsItemPage(tab) ? "No modify access on that tab." : "Merge is only for item tabs.");
                 return false;
             }
 
@@ -218,13 +219,13 @@ namespace FCCH.Managers.Organizer
             var moves = SortPlanner.PlanMergeOnly(tab, TabSlots(tab));
             if (moves.Count == 0)
             {
-                ChatHelper.Info("Stacks are already merged.");
+                Chat.Result("Stacks already merged.");
                 return false;
             }
 
             if (moves.Count > SortPlanner.MoveCap)
             {
-                ChatHelper.Warning($"Merge needs {moves.Count} moves, over the {SortPlanner.MoveCap} cap. Aborting.");
+                Chat.Warn($"Aborted · Merge needs {moves.Count} moves (cap {SortPlanner.MoveCap}).");
                 return false;
             }
 
@@ -242,7 +243,7 @@ namespace FCCH.Managers.Organizer
             foreach (var move in moves)
                 _moveManager.Enqueue(move);
 
-            ChatHelper.Verbose($"Queued {moves.Count} merge moves.");
+            Log.Verbose($"Queued {moves.Count} merge moves.");
             return true;
         }
 
@@ -269,7 +270,7 @@ namespace FCCH.Managers.Organizer
 
             if (_mergeRechecked)
             {
-                ChatHelper.Warning("Could not fully merge the tab (likely chest contention or permissions).");
+                Chat.Warn("Couldn't fully merge (contention or permissions).");
                 FinishMerge(success: false);
                 return;
             }
@@ -297,7 +298,7 @@ namespace FCCH.Managers.Organizer
 
             if (success)
             {
-                ChatHelper.Info($"Merged {GetTabDisplayName(_mergeTab)} ({_mergeMoveTotal} moves).");
+                Chat.Result($"Merged {GetTabDisplayName(_mergeTab)} · {_mergeMoveTotal} moves.");
                 Common.SoundHelper.PlayCompletionSound(_config);
                 _onTabsRefreshRequested(new[] { _mergeTab });
             }
@@ -312,7 +313,7 @@ namespace FCCH.Managers.Organizer
         {
             DebugLog("Job completed. Refreshing affected tabs.");
             var moved = LastCheck?.DepositMoves?.Count ?? 0;
-            ChatHelper.Info(moved > 0
+            Chat.Result(moved > 0
                 ? $"Moved {moved} items to {GetTabDisplayName(CurrentRequest.DestTab)}."
                 : "Organizer job completed.");
             LastCheck = null;
@@ -320,12 +321,7 @@ namespace FCCH.Managers.Organizer
             Common.SoundHelper.PlayCompletionSound(_config);
         }
 
-        private void DebugLog(string msg)
-        {
-            if (!_config.DebugMode) return;
-            FCCHLog.Info($"[Organizer] {msg}");
-            Common.ChatHelper.Debug($"[Org] {msg}");
-        }
+        private void DebugLog(string msg) => Log.Debug(msg, "Organizer");
 
         public OrgCheckResult Check()
         {
@@ -421,7 +417,7 @@ namespace FCCH.Managers.Organizer
 
         public void Dispose()
         {
-            try { _executor.Cancel(); } catch (Exception ex) { FCCHLog.Error(ex, "[OrgService] Executor cancel during dispose threw."); }
+            try { _executor.Cancel(); } catch (Exception ex) { Log.Error(ex, "[OrgService] Executor cancel during dispose threw."); }
             if (_sortActive) FinishSort(success: false);
             if (_mergeActive) FinishMerge(success: false);
             _executor.OnJobCompleted -= HandleJobCompleted;

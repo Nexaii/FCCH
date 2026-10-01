@@ -189,76 +189,35 @@ namespace FCCH.UI
                 }
                 ImGui.Spacing();
 
-#if DEBUG
-                if (DrawSection("Diagnostics"))
+                if (DrawSection("Window"))
                 {
-                    DrawSettingRow("Enable Debug Mode", () =>
+                    DrawSettingRow("Lock to Chest", () =>
                     {
-                        bool debug = _configuration.DebugMode;
-                        if (ImGui.Checkbox("##debugMode", ref debug))
+                        bool locked = _configuration.IsWindowLocked;
+                        if (ImGui.Checkbox("##windowLocked", ref locked))
                         {
-                            _configuration.DebugMode = debug;
-                            _configuration.Save();
-                        }
-                    });
-
-                    DrawSettingRow("Custom Debug Path", () =>
-                    {
-                        string logPath = _configuration.DebugLogPath;
-                        ImGui.SetNextItemWidth(220f);
-                        if (ImGui.InputTextWithHint("##logPath", "Default: FCCH_Debug.log", ref logPath, 256))
-                        {
-                            _configuration.DebugLogPath = logPath;
+                            _configuration.IsWindowLocked = locked;
                             _configuration.Save();
                         }
                         ImGui.SameLine();
-                        ImGui.PushFont(UiBuilder.IconFont);
-                        if (ImGui.Button(FontAwesomeIcon.Folder.ToIconString() + "##logBrowse"))
-                        {
-                            _fileDialogManager.SaveFileDialog("Select Log File", ".log", "FCCH_Debug.log", ".log", (success, selectedPath) =>
-                            {
-                                if (success)
-                                {
-                                    _configuration.DebugLogPath = selectedPath;
-                                    _configuration.Save();
-                                }
-                            });
-                        }
-                        ImGui.PopFont();
+                        ImGui.TextDisabled("(?)");
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("When locked, the Settings window stays attached to the Company Chest. When unlocked, you can drag it freely.");
                     });
 
-                    DrawSettingRow("Verbose Logging", () =>
+                    DrawSettingRow("Snap to Chest", () =>
                     {
-                        bool verbose = _configuration.VerboseMode;
-                        if (ImGui.Checkbox("##verbose", ref verbose))
+                        if (ImGui.Button("Snap##windowSnap", new Vector2(120, 0)))
                         {
-                            _configuration.VerboseMode = verbose;
+                            _configuration.IsWindowLocked = true;
+                            _configuration.SettingsPosX = -1f;
+                            _configuration.SettingsPosY = -1f;
                             _configuration.Save();
                         }
+                        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Re-attach the Settings window to its spot beside the Company Chest.");
                     });
-
-                    ImGui.Spacing();
-                    ImGui.TextDisabled("Internal diagnostic commands");
-                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.2f, 0.2f, 0.1f, 0.5f));
-                    string[] diagnosticCommands =
-                    {
-                        "accessprobe - dump live chest addon permission state",
-                        "debug - toggle debug logging",
-                        "fcperms [row] - dump raw FC rank permission bytes",
-                        "gildebug - trace gil callbacks",
-                        "info - dump FC rank + per-tab access (chest must be open)",
-                        "ipctest - invoke FCCH IPC surface and report pass/fail to /xllog",
-                    };
-                    float diagnosticBoxHeight = ImGui.GetTextLineHeightWithSpacing() * diagnosticCommands.Length + ImGui.GetStyle().WindowPadding.Y * 2;
-                    if (ImGui.BeginChild("InternalDiagnosticsBox", new Vector2(ImGui.GetContentRegionAvail().X, diagnosticBoxHeight), true))
-                    {
-                        foreach (var command in diagnosticCommands)
-                            ImGui.TextColored(ImGuiColors.DalamudOrange, command);
-                    }
-                    ImGui.EndChild();
-                    ImGui.PopStyleColor();
                 }
-#endif
+                ImGui.Spacing();
+
                 ImGui.Spacing();
 
                 ImGui.Spacing();
@@ -284,12 +243,12 @@ namespace FCCH.UI
                     _configuration.ResetToolbarButtons();
                     _configuration.MoveDelayInMs = 700;
                     _configuration.WithdrawDelayInMs = 700;
-                    _configuration.DebugMode = false;
-                    _configuration.DebugLogPath = "";
-                    _configuration.VerboseMode = false;
                     _configuration.CompactItemNames = true;
                     _configuration.EnableItemContextMenuEntries = false;
                     _configuration.QuietMode = false;
+                    _configuration.IsWindowLocked = true;
+                    _configuration.SettingsPosX = -1f;
+                    _configuration.SettingsPosY = -1f;
                     _configuration.Save();
                 }
                 ImGui.PopStyleColor();
@@ -446,10 +405,16 @@ namespace FCCH.UI
 
         private void DrawGilPreview()
         {
+            if (!Plugin.ClientState.IsLoggedIn)
+            {
+                ImGui.TextDisabled("Not logged in.");
+                return;
+            }
+
             uint playerGil = GilValidator.GetPlayerGil();
             if (playerGil == 0)
             {
-                ImGui.TextDisabled("Not logged in.");
+                ImGui.TextDisabled("You have no gil. Nothing moves.");
                 return;
             }
 
@@ -484,7 +449,7 @@ namespace FCCH.UI
                 DrawGilAmountInput("##gilKeep", _configuration.GilAlwaysKeep, v => _configuration.GilAlwaysKeep = v);
                 ImGui.SameLine();
                 ImGui.TextDisabled("(?)");
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Gil kept in your own inventory, never deposited. 0 disables it.");
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Gil kept in your own inventory, never deposited. Also limits /fcch gd. 0 disables it.");
             });
         }
 

@@ -2,6 +2,7 @@ using FCCH.Common;
 using System;
 using System.Collections.Concurrent;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.GameData
 {
@@ -31,7 +32,7 @@ namespace FCCH.GameData
             }
             catch (Exception ex)
             {
-                FCCHLog.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
+                Log.Warning($"Failed to get stack size for Item#{itemId}: {ex.Message}");
             }
             return DefaultMaxStack;
         }

@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
 using Lumina.Excel.Sheets;
+using FCCH.Diagnostics;
 
 namespace FCCH.Common
 {
@@ -52,7 +53,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCHLog.Error($"Export failed: {ex.Message}");
+                Log.Error($"Export failed: {ex.Message}");
                 return false;
             }
         }
@@ -84,7 +85,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCHLog.Error($"Import failed: {ex.Message}");
+                Log.Error($"Import failed: {ex.Message}");
                 return (ImportResult.ParseError, default);
             }
         }
@@ -123,7 +124,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCHLog.Error($"Import failed: {ex.Message}");
+                Log.Error($"Import failed: {ex.Message}");
                 return (ImportResult.ParseError, null, 0, new List<string>());
             }
         }

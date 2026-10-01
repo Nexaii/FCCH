@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using FCCH.Diagnostics;
 
 namespace FCCH.Common
 {
@@ -21,7 +22,7 @@ namespace FCCH.Common
 
                 if (!System.IO.File.Exists(soundPath))
                 {
-                    FCCHLog.Warning($"[SoundHelper] Sound file not found: {soundPath}");
+                    Log.Warning($"[SoundHelper] Sound file not found: {soundPath}");
                     return;
                 }
 
@@ -31,7 +32,7 @@ namespace FCCH.Common
             }
             catch (Exception ex)
             {
-                FCCHLog.Warning($"[SoundHelper] Failed to play sound: {ex.Message}");
+                Log.Warning($"[SoundHelper] Failed to play sound: {ex.Message}");
             }
         }
     }

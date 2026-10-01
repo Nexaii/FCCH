@@ -3,6 +3,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FCCH.Common;
 using FCCH.Models;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers.Gil
 {
@@ -25,33 +26,33 @@ namespace FCCH.Managers.Gil
         {
             if (!GilValidator.IsChestOpen())
             {
-                if (!quiet) ChatHelper.Error("Company Chest must be open to deposit Gil.");
+                if (!quiet) Chat.Error("Open the FC chest to deposit gil.");
                 return;
             }
 
             var access = _chestManager.GetChestAccess(InventoryType.FreeCompanyGil);
             if (access != Constants.FCPermissions.FullAccess && access != Constants.FCPermissions.DepositOnly)
             {
-                if (!quiet) ChatHelper.Info("Skipping gd for gil.");
+                if (!quiet) Chat.Result("Skipped gd (gil).");
                 return;
             }
 
             var validationResult = GilValidator.ValidateDeposit(amount, GilValidator.GetPlayerGil(), GilValidator.GetFCGilHeader(), _configuration.GilAlwaysKeep);
             if (!validationResult.IsValid)
             {
-                if (!quiet) ChatHelper.Error(validationResult.ErrorMessage);
+                if (!quiet) Chat.Error(validationResult.ErrorMessage);
                 return;
             }
 
             var finalAmount = validationResult.AdjustedAmount;
             if (finalAmount == 0)
             {
-                if (!quiet) ChatHelper.Info("No Gil to deposit after applying constraints.");
+                if (!quiet) Chat.Result("No gil to deposit (constraints).");
                 return;
             }
 
             if (finalAmount < amount)
-                ChatHelper.Verbose($"Amount clamped from {amount:N0} to {finalAmount:N0} due to constraints.");
+                Log.Verbose($"Amount clamped from {amount:N0} to {finalAmount:N0} due to constraints.");
 
             _setPendingTransaction(new PendingGilTransaction
             {
@@ -69,7 +70,7 @@ namespace FCCH.Managers.Gil
             else
             {
                 SwitchToGilTab();
-                ChatHelper.Verbose($"Queued deposit of {finalAmount:N0} Gil.");
+                Log.Verbose($"Queued deposit of {finalAmount:N0} Gil.");
             }
         }
 
@@ -77,27 +78,27 @@ namespace FCCH.Managers.Gil
         {
             if (!GilValidator.IsChestOpen())
             {
-                ChatHelper.Error("Company Chest must be open to withdraw Gil.");
+                Chat.Error("Open the FC chest to withdraw gil.");
                 return;
             }
 
             if (_chestManager.GetChestAccess(InventoryType.FreeCompanyGil) != Constants.FCPermissions.FullAccess)
             {
-                ChatHelper.Info("Skipping gw for gil.");
+                Chat.Result("Skipped gw (gil).");
                 return;
             }
 
             var validationResult = GilValidator.ValidateWithdraw(amount, GilValidator.GetPlayerGil(), GilValidator.GetFCGilHeader(), GilValidator.GetFCGilContainerQuantity);
             if (!validationResult.IsValid)
             {
-                ChatHelper.Error(validationResult.ErrorMessage);
+                Chat.Error(validationResult.ErrorMessage);
                 return;
             }
 
             var finalAmount = validationResult.AdjustedAmount;
             if (finalAmount == 0)
             {
-                ChatHelper.Info("No Gil to withdraw after applying constraints.");
+                Chat.Result("No gil to withdraw (constraints).");
                 return;
             }
 
@@ -121,7 +122,7 @@ namespace FCCH.Managers.Gil
             };
             
             _moveManager.Enqueue(moveOp);
-            ChatHelper.Verbose($"Queued withdrawal of {finalAmount:N0} Gil.");
+            Log.Verbose($"Queued withdrawal of {finalAmount:N0} Gil.");
         }
 
         internal static uint CalculateAutoAmount(Configuration configuration, uint playerGil)

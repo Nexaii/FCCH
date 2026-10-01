@@ -7,6 +7,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Lumina.Excel.Sheets;
 using FCCH.Common;
 using FCCH.GameData;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers
 {
@@ -33,7 +34,7 @@ namespace FCCH.Managers
 
             if (targetIndex == -1)
             {
-                FCCHLog.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
+                Log.Error($"[SwitchToPage] Invalid target index {targetIndex} for page {targetPage}");
                 return;
             }
 
@@ -69,7 +70,7 @@ namespace FCCH.Managers
         public ChestManager(Configuration config)
         {
             _configuration = config;
-            _inventoryScanner = new InventoryScanner(config);
+            _inventoryScanner = new InventoryScanner();
         }
 
         public int ScanFCChest()
@@ -292,20 +293,20 @@ namespace FCCH.Managers
             try
             {
                 var uiModule = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
-                if (uiModule == null) { FCCHLog.Warning("[FCPerms] UIModule null."); return; }
+                if (uiModule == null) { Log.Warning("[FCPerms] UIModule null."); return; }
 
                 var infoModule = uiModule->GetInfoModule();
-                if (infoModule == null) { FCCHLog.Warning("[FCPerms] InfoModule null."); return; }
+                if (infoModule == null) { Log.Warning("[FCPerms] InfoModule null."); return; }
 
                 var fcProxy = (InfoProxyFreeCompany*)infoModule->GetInfoProxyById(InfoProxyId.FreeCompany);
-                if (fcProxy == null) { FCCHLog.Warning("[FCPerms] FreeCompany proxy null."); return; }
+                if (fcProxy == null) { Log.Warning("[FCPerms] FreeCompany proxy null."); return; }
 
                 byte playerRank = fcProxy->Rank;
-                FCCHLog.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
+                Log.Info($"[FCPerms] PlayerRank field = {playerRank} (0x{playerRank:X2})");
 
                 if (overrideRank.HasValue)
                 {
-                    if (overrideRank.Value >= 14) { FCCHLog.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
+                    if (overrideRank.Value >= 14) { Log.Warning($"[FCPerms] Override rank {overrideRank.Value} out of range."); return; }
                     DumpRankRow(fcProxy, overrideRank.Value, playerRank);
                     return;
                 }
@@ -314,7 +315,7 @@ namespace FCCH.Managers
             }
             catch (Exception ex)
             {
-                FCCHLog.Error(ex, "[FCPerms] Dump failed.");
+                Log.Error(ex, "[FCPerms] Dump failed.");
             }
         }
 
@@ -324,7 +325,7 @@ namespace FCCH.Managers
             if (addon == null)
             {
                 const string closed = "[AccessProbe] Company Chest addon is not open.";
-                FCCHLog.Info(closed);
+                Log.Info(closed);
                 return closed;
             }
 
@@ -347,7 +348,7 @@ namespace FCCH.Managers
             uint tab5 = (packedItems >> 8) & 3;
 
             string message = $"[AccessProbe] mode={mode} selectedTab={selectedTab} page={page} packedItems=0x{packedItems:X8} tabs=[1:{tab1},2:{tab2},3:{tab3},4:{tab4},5:{tab5}] crystal={crystal} gil={gil} action={action} visibleMode={visibleMode} visibleMask=0x{visibleMask:X8} limitedMaskMode={limitedMaskMode}";
-            FCCHLog.Info(message);
+            Log.Info(message);
             return message;
         }
 
@@ -359,7 +360,7 @@ namespace FCCH.Managers
             var hex = new System.Text.StringBuilder();
             for (int i = 0; i < 10; i++) hex.Append($" {(byte)p[i]:X2}");
 
-            FCCHLog.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
+            Log.Info($"[FCPerms] PlayerRank={playerRank} dumpRank={rankIndex} RankNumber={rd.RankNumber} MemberCount={rd.MemberCount} Bytes:{hex}");
 
             byte d1 = DecodeChestAccess(p, InventoryType.FreeCompanyPage1);
             byte d2 = DecodeChestAccess(p, InventoryType.FreeCompanyPage2);
@@ -369,8 +370,8 @@ namespace FCCH.Managers
             byte dc = DecodeChestAccess(p, InventoryType.FreeCompanyCrystals);
             byte dg = DecodeChestAccess(p, InventoryType.FreeCompanyGil);
 
-            FCCHLog.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
-            FCCHLog.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
+            Log.Info($"[FCPerms] Decoded Items1={NameAccess(d1)}({d1}) Items2={NameAccess(d2)}({d2}) Items3={NameAccess(d3)}({d3}) Items4={NameAccess(d4)}({d4}) Items5={NameAccess(d5)}({d5}) Crystals={NameAccess(dc)}({dc}) Gil={NameAccess(dg)}({dg})");
+            Log.Info($"[FCPerms] CS-getter (buggy upstream, for comparison) Items1={(byte)rd.Items1} Items2={(byte)rd.Items2} Items3={(byte)rd.Items3} Items4={(byte)rd.Items4} Items5={(byte)rd.Items5} Crystals={(byte)rd.Crystals} Gil={(byte)rd.Gil}");
         }
 
         public static string NameAccess(byte v) => v switch
@@ -516,7 +517,7 @@ namespace FCCH.Managers
                     }
                     catch (Exception ex)
                     {
-                        FCCHLog.Debug($"[ChestManager] Crystal name lookup failed for item {c.ItemId}: {ex.Message}");
+                        Log.Debug($"[ChestManager] Crystal name lookup failed for item {c.ItemId}: {ex.Message}");
                         sb.AppendLine($"  - Item#{c.ItemId}: {c.Quantity:N0}");
                     }
                 }

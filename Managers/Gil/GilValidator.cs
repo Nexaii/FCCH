@@ -1,6 +1,7 @@
 using System;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FCCH.Common;
+using FCCH.Diagnostics;
 
 namespace FCCH.Managers.Gil
 {
@@ -61,7 +62,7 @@ namespace FCCH.Managers.Gil
 
             if (finalAmount < requestedAmount)
             {
-                ChatHelper.Verbose($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
+                Log.Verbose($"Amount clamped from {requestedAmount:N0} to {finalAmount:N0} due to constraints.");
             }
 
             return new GilValidationResult { IsValid = true, AdjustedAmount = finalAmount, ErrorMessage = "" };

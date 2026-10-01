@@ -503,11 +503,11 @@ namespace FCCH.UI
                 _undo.Relabel($"Add {added:N0} items from {category.Name}");
 
             if (added == 0)
-                Common.ChatHelper.Info($"All {ids.Count:N0} items from {category.Name} were already in your list.");
+                Chat.Result($"All {ids.Count:N0} from {category.Name} already in list.");
             else if (skipped > 0)
-                Common.ChatHelper.Info($"Added {added:N0} items from {category.Name} ({skipped:N0} already in list).");
+                Chat.Result($"Added +{added:N0} from {category.Name} ({skipped:N0} dupes).");
             else
-                Common.ChatHelper.Info($"Added {added:N0} items from {category.Name}.");
+                Chat.Result($"Added +{added:N0} from {category.Name}.");
 
             ClearSearch();
         }
@@ -825,11 +825,11 @@ namespace FCCH.UI
             {
                 if (Common.ExportHelper.Export(Common.ExportHelper.SinglesListPrefix, _configuration.WithdrawItems))
                 {
-                    Common.ChatHelper.Info("Custom list exported to clipboard.");
+                    Chat.Result("Copied Custom list to clipboard.");
                 }
                 else
                 {
-                    Common.ChatHelper.Warning("Failed to export custom list.");
+                    Chat.Warn("Failed to export Custom list.");
                 }
             }
             ImGui.PopStyleColor();
@@ -846,19 +846,19 @@ namespace FCCH.UI
                     var ineligible = data.RemoveAll(x => Common.ItemListEligibility.IsIneligible(x.ItemId));
                     if (data.Count == 0)
                     {
-                        Common.ChatHelper.Warning("Nothing to import. Every item was skipped.");
+                        Chat.Warn("Nothing to import. Every item was skipped.");
                     }
                     else
                     {
                         _undo.Capture(_configuration.WithdrawItems, $"Import {data.Count:N0} items");
                         _configuration.WithdrawItems = data;
                         _configuration.Save();
-                        Common.ChatHelper.Info(BuildImportReport(data.Count, skipped + ineligible, unmatched));
+                        Chat.Result(BuildImportReport(data.Count, skipped + ineligible, unmatched));
                     }
                 }
                 else
                 {
-                    Common.ChatHelper.Warning(Common.ExportHelper.GetErrorMessage(result, "Custom"));
+                    Chat.Warn(Common.ExportHelper.GetErrorMessage(result, "Custom"));
                 }
             }
             ImGui.PopStyleColor();
@@ -867,12 +867,12 @@ namespace FCCH.UI
 
         private static string BuildImportReport(int imported, int skipped, List<string> unmatched)
         {
-            var line = $"Imported {imported:N0} items.";
+            var line = $"Imported {imported:N0}";
             if (skipped > 0)
-                line += $" {skipped:N0} skipped, cannot go in an FC chest.";
+                line += $" · {skipped:N0} skipped (not chest-storable)";
             if (unmatched.Count > 0)
-                line += $" Not found: {JoinNames(unmatched)}.";
-            return line;
+                line += $" · not found: {JoinNames(unmatched)}";
+            return line + ".";
         }
 
         private static string JoinNames(List<string> names)
